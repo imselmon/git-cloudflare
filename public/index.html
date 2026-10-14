@@ -41,6 +41,7 @@
         <button class="bd-button" id="btn-llm">Spawn 8 agents</button>
         <button class="bd-button" data-variant="secondary" id="btn-bots">Swarm 200 bots</button>
         <button class="bd-button" data-variant="secondary" data-size="sm" id="btn-bots-1k">Swarm 1,000 bots</button>
+        <button class="bd-button" data-variant="secondary" data-size="sm" id="btn-conflict">Force a conflict</button>
         <button class="bd-button" data-variant="danger" data-size="sm" id="btn-stop">Stop all agents</button>
         <button class="bd-button" data-variant="ghost" data-size="sm" id="btn-reset">Reset project</button>
       </div>
@@ -313,6 +314,7 @@
   $("#btn-bots").onclick = (e) => busy(e.target, () => api("/api/swarm", { n: 200, kind: "synthetic", maxChanges: 1 }));
   $("#btn-bots-1k").onclick = (e) => busy(e.target, () => api("/api/swarm", { n: 1000, kind: "synthetic", maxChanges: 1 }));
   $("#btn-stop").onclick = (e) => busy(e.target, () => api("/api/stop", {}));
+  $("#btn-conflict").onclick = (e) => busy(e.target, () => api("/api/demo/conflict", {}));
   $("#btn-reset").onclick = (e) => { if (!confirm("Create a fresh trunk and backlog? Agents keep running until stopped.")) return; busy(e.target, async () => { feedItems = []; await api("/api/project/init", { force: true }); reloadPreview(); }); };
   $("#btn-reload").onclick = () => { previewTimer = null; reloadPreview(); };
   $("#btn-propose").onclick = async (e) => {

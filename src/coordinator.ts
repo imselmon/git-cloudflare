@@ -331,9 +331,11 @@ export class Coordinator extends DurableObject<Env> {
     this.sql.exec("UPDATE changes SET status = 'claimed', attempt = ?, updated_at = ? WHERE id = ? AND status = 'open'", n, now, pick.id);
     const attemptId = `at_${rid()}`;
     const strand = `strand-${pick.id.slice(3)}-${n}`;
+    let stage = "get-trunk";
     try {
       const ns = this.env.ARTIFACTS;
       using trunk = await getRepo(ns, trunkName);
+      stage = "fork";
       let forked: { name: string; remote: string; token: string | null } | null = null;
       for (let i = 0; !forked; i++) {
         try {
@@ -343,13 +345,22 @@ export class Coordinator extends DurableObject<Env> {
           if (code === "ALREADY_EXISTS" || /ALREADY_EXISTS/.test(String((e as Error).message))) {
             using s = await getRepo(ns, strand);
             forked = { name: strand, remote: (await s.info()).remote, token: null };
-          } else if (i >= 2) throw e;
-          else await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+          } else if (i >= 4) throw e;
+          else await new Promise((r) => setTimeout(r, 500 * (i + 1) + Math.random() * 500));
         }
       }
+      stage = "get-strand";
       using srepo = await getRepo(ns, forked.name);
+      stage = "token";
       const [tok, head] = await Promise.all([srepo.createToken("write", lease), srepo.log({ ref: BRANCH, limit: 1 })]);
-      if (forked.token) await srepo.revokeToken(forked.token); // the fork's day-long token must not outlive the lease
+      stage = "revoke-initial";
+      if (forked.token) {
+        try {
+          await srepo.revokeToken(forked.token); // the fork's day-long token must not outlive the lease
+        } catch {
+          /* best effort */
+        }
+      }
       const baseSha = head[0]?.hash ?? this.get("trunk_sha") ?? "";
       const leaseExpires = now + lease * 1000;
       this.sql.exec(
@@ -368,8 +379,8 @@ export class Coordinator extends DurableObject<Env> {
     } catch (e) {
       this.sql.exec("UPDATE changes SET status = 'open', attempt = ?, updated_at = ? WHERE id = ?", pick.attempt, Date.now(), pick.id);
       this.sql.exec("DELETE FROM attempts WHERE id = ?", attemptId);
-      this.event("error", { where: "claim", agent: input.agent, message: String((e as Error).message) });
-      throw e;
+      this.event("error", { where: `claim:${stage}`, agent: input.agent, message: String((e as Error).message) });
+      throw new Error(`claim failed at ${stage}: ${String((e as Error).message)}`);
     }
   }
 
@@ -524,7 +535,7 @@ export class Coordinator extends DurableObject<Env> {
     for (let i = 1; i <= n; i++) ids.push(`${input.kind === "llm" ? "agent" : "bot"}-${seed}-${i}`);
     for (const id of ids) this.touchAgent(id, input.kind, input.model ?? null, "starting");
     this.event("swarm", { n, kind: input.kind, model: input.model ?? null });
-    const spread = Math.min(30_000, n * 30);
+    const spread = Math.min(90_000, n * 80);
     for (let i = 0; i < ids.length; i += 50) {
       await Promise.all(
         ids.slice(i, i + 50).map((id, j) =>
@@ -539,6 +550,23 @@ export class Coordinator extends DurableObject<Env> {
       );
     }
     return { started: ids.length, agents: ids.slice(0, 20) };
+  }
+
+  /** Stage a guaranteed conflict: two changes that rewrite the same headline, in optimistic mode, with two agents. */
+  async demoConflict() {
+    this.set("mode", "optimistic");
+    this.event("mode", { mode: "optimistic", why: "conflict demo" });
+    const seed = rid(3);
+    const a = this.insertChange({ title: `Rename the hero headline to “Loom Conf Lisbon”`, body: "In sections/hero.html change the <h1> text to exactly: Loom Conf Lisbon: agents that build, together. Keep every other line exactly as it is.", scope: ["sections/hero.html"], accept: "The h1 reads 'Loom Conf Lisbon: agents that build, together.'", kind: "llm", priority: 9 }, "demo");
+    const b = this.insertChange({ title: `Shorten the hero headline`, body: "In sections/hero.html change the <h1> text to exactly: Agents that build. Keep every other line exactly as it is.", scope: ["sections/hero.html"], accept: "The h1 reads 'Agents that build.'", kind: "llm", priority: 9 }, "demo");
+    const ids = [`agent-${seed}-a`, `agent-${seed}-b`];
+    for (const id of ids) this.touchAgent(id, "llm", null, "starting");
+    await Promise.all([
+      this.env.AGENT.get(this.env.AGENT.idFromName(ids[0])).start({ agent: ids[0], kind: "llm", maxChanges: 1, stagger: 0 }),
+      this.env.AGENT.get(this.env.AGENT.idFromName(ids[1])).start({ agent: ids[1], kind: "llm", maxChanges: 1, stagger: 50 }),
+    ]);
+    this.event("swarm", { n: 2, kind: "llm", model: null, demo: "conflict" });
+    return { changes: [a, b], agents: ids };
   }
 
   async stopAll() {

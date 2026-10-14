@@ -73,14 +73,14 @@ export class AgentRunner extends DurableObject<Env> {
       st.errors++;
       st.lastError = `${new Date().toISOString()} ${String((e as Error).message).slice(0, 300)}`;
       console.error(`agent ${st.agent} step failed`, e);
-      again = st.errors < 5;
+      again = st.errors < 8;
       if (!again) {
         st.running = false;
         await this.coord().agentStatus({ agent: st.agent, status: "failed", kind: st.kind, model: st.model ?? undefined });
       }
     }
     await this.ctx.storage.put("state", st);
-    if (again && st.running) await this.ctx.storage.setAlarm(Date.now() + (st.errors ? 1500 * st.errors : 400) + Math.random() * 1500);
+    if (again && st.running) await this.ctx.storage.setAlarm(Date.now() + (st.errors ? 2000 * st.errors : 400) + Math.random() * 2000);
   }
 
   /** One iteration. Returns true when the loop should continue. */

@@ -77,6 +77,7 @@ app.post("/api/swarm", async (req, res) => {
   res.json(await coord(req.env).swarm({ n: Number(b.n ?? 1), kind: b.kind === "synthetic" ? "synthetic" : "llm", model: b.model, maxChanges: b.maxChanges }));
 });
 app.post("/api/stop", async (req, res) => res.json(await coord(req.env).stopAll()));
+app.post("/api/demo/conflict", async (req, res) => res.json(await coord(req.env).demoConflict()));
 app.get("/api/attempts", async (req, res) => res.json(await coord(req.env).listAttempts({ outcome: req.query.get("outcome") ?? undefined, agent: req.query.get("agent") ?? undefined, limit: Number(req.query.get("limit") ?? 100) })));
 app.get("/api/events", async (req, res) => res.json(await coord(req.env).listEvents({ kind: req.query.get("kind") ?? undefined, limit: Number(req.query.get("limit") ?? 200) })));
 app.get("/api/why", async (req, res) => res.json(await coord(req.env).why({ path: req.query.get("path") ?? "" })));
