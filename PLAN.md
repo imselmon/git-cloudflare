@@ -80,7 +80,7 @@ Side exits: `expired → open`, `rejected`, `conflict → replaying (attempt+1)`
 
 | Component | Priority | Notes |
 |---|---|---|
-| Worker router and static dashboard (`public/`) | MUST | Workers Static Assets. `run_worker_first` covers `/api/*`, `/ws`, `/site/*`, `/mcp`. |
+| Worker router ([Blaze](https://blaze.monarcpro.app/), `blazefw`) and static dashboard (`public/`) | MUST | Express-style routes and middleware (cors, request-id, rate-limit). `res.raw()` passes Durable Object responses through, including WebSocket 101. Workers Static Assets serves the UI; `run_worker_first` covers `/api/*`, `/ws`, `/site/*`, `/mcp`. |
 | **Coordinator DO** | MUST | Single-threaded, so claims are linearizable. WebSocket Hibernation API for live fan-out. Alarms expire leases. |
 | **AgentRunner DO** | MUST | Alarm-driven loop. `llm` mode uses Workers AI `@cf/zai-org/glm-5.3-flash`. `synthetic` mode makes deterministic edits for scale. |
 | **Integrator DO** | MUST | Keeps trunk's working copy in a MemoryFS between batches and is trunk's only writer, so pushes never race. |
@@ -156,13 +156,13 @@ CREATE TABLE events   (seq INTEGER PRIMARY KEY AUTOINCREMENT, ts INT, kind TEXT,
 
 ```
 LICENSE  README.md  PLAN.md  package.json  tsconfig.json  wrangler.jsonc
-src/index.ts         router: api, ws, site, mcp, assets
+src/index.ts         Blaze app: api, ws, site, mcp routes (assets via Static Assets)
 src/coordinator.ts   Coordinator DO (intents, scheduler, leases, ws, stats)
 src/agent.ts         AgentRunner DO (llm + synthetic)
 src/integrator.ts    Integrator DO (merkle diff, scope check, review, merge, replay, push)
 src/artifacts.ts     fork/token/readFile/tree-diff helpers, retry on 10302/10303
 src/git.ts           isomorphic-git clone/commit/push/notes on MemoryFS
-src/memory-fs.ts     copied from the Artifacts isomorphic-git example
+src/memory-fs.ts     our own in-memory fs (written fresh, not pasted from docs: rules §4 require original work)
 src/merge.ts         node-diff3 3-way merge + JSON union merge for site.json
 src/llm.ts           prompts: edit, replay, review (JSON output)
 src/mcp.ts           MCP tools
@@ -248,7 +248,7 @@ All building happens in this Claude Code session: no subagents and no workflows.
 
 | IST | What | Done when |
 |---|---|---|
-| **03:15–03:45** | **Setup and verify.** `wrangler login` → scaffold (`package.json`, `wrangler.jsonc`, `tsconfig`) → `pnpm add isomorphic-git node-diff3 agents` → `wrangler types`. Spike route: create `trunk`, push a seed commit, fork it, push to the fork, then `readFile`, `readTree`, `log`. Measure fork latency. Read the `ArtifactsCommitMetadata` and `TreeEntry` fields from the types. | The spike works against the real service. |
+| **03:15–03:45** | **Setup and verify.** `wrangler login` → scaffold (`package.json`, `wrangler.jsonc`, `tsconfig`) → `pnpm add blazefw isomorphic-git node-diff3 agents` → `wrangler types`. Spike route: create `trunk`, push a seed commit, fork it, push to the fork, then `readFile`, `readTree`, `log`. Measure fork latency. Read the `ArtifactsCommitMetadata` and `TreeEntry` fields from the types. | The spike works against the real service. |
 | 03:45–04:45 | `artifacts.ts`, `git.ts`, `memory-fs.ts`, seed site, Coordinator DO (schema, intents, claim with fork and token, submit, WebSocket). | `curl` claim → plain-git push → submit works end to end. |
 | 04:45–05:45 | Integrator: Merkle diff, scope check, clean and auto-merge path, trailers, batch push. `/site/:ref/*` preview. | Landed changes show up on `/site/main/`. |
 | 05:45–06:30 | AgentRunner (LLM and synthetic), Workers AI edit prompt, `/api/swarm`. Bare dashboard: board, counters, preview iframe. **Checkpoint: minimum demo slice.** | 10 LLM agents land changes with nobody touching the keyboard. |
@@ -319,7 +319,7 @@ All building happens in this Claude Code session: no subagents and no workflows.
 Git assumes the author of a change is expensive to ask twice, which is why we have long-lived branches, hand-resolved conflicts and humans reading diffs. Agents break that assumption, because re-running work costs pennies. Tributary is version control built on that fact. The unit of change is an *intent* (a goal plus a declared scope), not a pull request. Every intent attempt gets its own Artifacts repo, and its lease *is* a scoped write token: when the token expires or is revoked, the agent physically cannot push. File-disjoint work lands in parallel through a batched single-writer trunk. A true conflict is never merged by hand: the intent is *replayed* on the new trunk. Review checks each diff against its own intent and scope, and every trunk commit carries its intent, agent, model and review as git trailers and notes. Thousands of agents, no merge markers, and full provenance.
 
 **How you used Cloudflare (about 150 words):**
-Artifacts is the substrate. A trunk repo plus one forked repo per intent attempt (1,000+ in the demo). Repo-scoped write tokens with TTLs act as leases, `revokeToken` is the kill switch, and read-only tokens go to reviewers. `readCommit`/`readTree` give a server-side Merkle diff for scope enforcement without cloning, `readFile` serves live previews of any ref, and git smart-HTTP (isomorphic-git inside Workers, plain git outside) is the write path. Workers host the API, the dashboard (Static Assets) and an MCP server. Durable Objects provide a linearizable Coordinator (SQLite, WebSocket Hibernation, alarms for lease expiry), an AgentRunner per agent, and a single-writer Integrator that batches trunk pushes. Workers AI powers the edit, replay and review agents (GLM-5.3-Flash, Kimi K2.7 Code).
+Artifacts is the substrate. A trunk repo plus one forked repo per intent attempt (1,000+ in the demo). Repo-scoped write tokens with TTLs act as leases, `revokeToken` is the kill switch, and read-only tokens go to reviewers. `readCommit`/`readTree` give a server-side Merkle diff for scope enforcement without cloning, `readFile` serves live previews of any ref, and git smart-HTTP (isomorphic-git inside Workers, plain git outside) is the write path. Workers host the API (routed with Blaze, our zero-dependency Express-style framework for Workers), the dashboard (Static Assets) and an MCP server. Durable Objects provide a linearizable Coordinator (SQLite, WebSocket Hibernation, alarms for lease expiry), an AgentRunner per agent, and a single-writer Integrator that batches trunk pushes. Workers AI powers the edit, replay and review agents (GLM-5.3-Flash, Kimi K2.7 Code).
 
 **Instructions to run:**
 ```bash
