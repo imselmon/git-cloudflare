@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Braid</title>
+<meta name="description" content="Braid: version control for agent swarms on Cloudflare Workers and Artifacts.">
+<link rel="icon" href="/brand/braid-app-icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/braid.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <a href="/" aria-label="Braid home">
+      <img class="wordmark light" src="/brand/braid-wordmark.svg" alt="Braid">
+      <img class="wordmark dark" src="/brand/braid-wordmark-light.svg" alt="Braid">
+    </a>
+    <p class="caption">Version control for agent swarms. A change is an intent with a scope. Every attempt gets its own strand. The lease is the token. Conflicts are replayed, never merged by hand.</p>
+    <section>
+      <h2>Trunk</h2>
+      <div class="stack caption">
+        <div>repo <span class="bd-code" id="trunk-name">–</span></div>
+        <div>head <span class="bd-code" id="trunk-sha">–</span></div>
+      </div>
+    </section>
+    <section>
+      <h2>Coordination</h2>
+      <div class="seg" id="mode-seg" role="group" aria-label="Mode">
+        <button data-mode="claims" aria-pressed="true">Claims</button>
+        <button data-mode="optimistic" aria-pressed="false">Optimistic</button>
+      </div>
+      <p class="caption" id="mode-help" style="margin:6px 0 10px">Overlapping scopes wait their turn.</p>
+      <div class="seg" id="review-seg" role="group" aria-label="Review">
+        <button data-review="on" aria-pressed="true">Review on</button>
+        <button data-review="off" aria-pressed="false">Review off</button>
+      </div>
+    </section>
+    <section>
+      <h2>Swarm</h2>
+      <div class="stack">
+        <button class="bd-button" id="btn-llm">Spawn 8 agents</button>
+        <button class="bd-button" data-variant="secondary" id="btn-bots">Swarm 200 bots</button>
+        <button class="bd-button" data-variant="secondary" data-size="sm" id="btn-bots-1k">Swarm 1,000 bots</button>
+        <button class="bd-button" data-variant="danger" data-size="sm" id="btn-stop">Stop all agents</button>
+        <button class="bd-button" data-variant="ghost" data-size="sm" id="btn-reset">Reset project</button>
+      </div>
+    </section>
+    <section>
+      <h2>Counts</h2>
+      <div class="stats" id="stats"></div>
+    </section>
+    <section>
+      <h2>Connect an agent</h2>
+      <p class="caption">Claude Code, one line:</p>
+      <pre id="mcp-cmd" style="font-size:12px">claude mcp add --transport http braid …/mcp</pre>
+    </section>
+  </aside>
+
+  <main class="main">
+    <header>
+      <div>
+        <h1 id="title">Loom Conf site</h1>
+        <p class="caption" id="subtitle">Loading…</p>
+      </div>
+      <div class="row-actions">
+        <button class="bd-button" data-variant="secondary" data-size="sm" id="btn-propose">Propose a change</button>
+      </div>
+    </header>
+    <nav class="bd-tabs" role="tablist">
+      <button class="bd-tab" role="tab" aria-selected="true" data-tab="changes">Changes <span class="bd-count" id="count-changes">0</span></button>
+      <button class="bd-tab" role="tab" aria-selected="false" data-tab="agents">Agents <span class="bd-count" id="count-agents">0</span></button>
+      <button class="bd-tab" role="tab" aria-selected="false" data-tab="trunk">Trunk</button>
+      <button class="bd-tab" role="tab" aria-selected="false" data-tab="activity">Activity</button>
+    </nav>
+    <section id="tab-changes" class="tab">
+      <div class="seg" id="filter-seg" style="margin-bottom:12px" role="group" aria-label="Filter">
+        <button data-filter="all" aria-pressed="true">All</button>
+        <button data-filter="open" aria-pressed="false">Open</button>
+        <button data-filter="claimed" aria-pressed="false">Working</button>
+        <button data-filter="queued" aria-pressed="false">Weaving</button>
+        <button data-filter="landed" aria-pressed="false">Landed</button>
+        <button data-filter="trouble" aria-pressed="false">Replays and rejects</button>
+      </div>
+      <div class="bd-list" id="changes"><div class="empty">Loading…</div></div>
+    </section>
+    <section id="tab-agents" class="tab" hidden>
+      <p class="caption" style="margin:0 0 12px">Click an agent to revoke its lease. Its token dies instantly and its next push fails.</p>
+      <div class="agent-grid" id="agents"></div>
+    </section>
+    <section id="tab-trunk" class="tab" hidden>
+      <div class="row-actions" style="margin-bottom:12px">
+        <button class="bd-button" data-variant="secondary" data-size="sm" id="btn-clone">Show clone command</button>
+        <a class="bd-button" data-variant="ghost" data-size="sm" href="/site/main/" target="_blank">Open live site</a>
+      </div>
+      <pre id="clone-cmd" hidden></pre>
+      <div class="bd-list log" id="log"><div class="empty">Loading…</div></div>
+    </section>
+    <section id="tab-activity" class="tab" hidden>
+      <div class="feed" id="feed-full"></div>
+    </section>
+  </main>
+
+  <aside class="side">
+    <div class="preview">
+      <div class="bar">
+        <span class="dot" id="preview-dot"></span>
+        <span>Live from trunk</span>
+        <span class="bd-code" id="preview-ref">main</span>
+        <button class="bd-button" data-variant="ghost" data-size="sm" id="btn-reload" style="margin-left:auto">Reload</button>
+        <a class="bd-button" data-variant="ghost" data-size="sm" href="/site/main/" target="_blank">Open</a>
+      </div>
+      <iframe id="preview" src="/site/main/" title="Live site served from Artifacts"></iframe>
+    </div>
+    <section>
+      <h2 class="label" style="margin-bottom:8px">Activity</h2>
+      <div class="feed" id="feed"></div>
+    </section>
+  </aside>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Change detail"></aside>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+(() => {
+  const $ = (s, el = document) => el.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const short = (sha) => (sha ? String(sha).slice(0, 7) : "–");
+  const ago = (ts) => { const s = Math.max(0, (Date.now() - ts) / 1000); if (s < 5) return "just now"; if (s < 60) return `${Math.floor(s)} s ago`; if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} h ago`; return `${Math.floor(s / 86400)} d ago`; };
+  const api = async (path, body) => { const r = await fetch(path, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : undefined); const j = await r.json().catch(() => ({})); if (!r.ok || j.error) throw new Error(j.error || r.statusText); return j; };
+
+  let state = null, filter = "all", tab = "changes", selected = null, feedItems = [], loadTimer = null, previewTimer = null;
+  const ICON = { open: "branch", claimed: "agent", queued: "merge", landed: "merge", rejected: "conflict", failed: "conflict" };
+
+  function badgeFor(c) {
+    if (c.status === "landed") return ["merged", "Landed"];
+    if (c.status === "claimed") return ["working", c.attempt > 1 ? "Replaying" : "Working"];
+    if (c.status === "queued") return ["working", "Weaving"];
+    if (c.status === "failed") return ["conflict", "Failed"];
+    if (c.status === "rejected") return ["conflict", "Rejected"];
+    if (c.attempt > 0 && c.hint) return ["stale", "Replay"];
+    return ["", "Open"];
+  }
+
+  function describe(ev) {
+    const d = ev.data || {}, t = d.title ? `“${esc(d.title)}”` : "";
+    switch (ev.kind) {
+      case "claimed": return `<b>${esc(d.agent)}</b> claimed ${t}${d.replay ? " (replay, attempt " + d.attempt + ")" : ""} → <span class="bd-code">${esc(d.strand)}</span>, lease ${d.lease}s`;
+      case "submitted": return `<b>${esc(d.agent)}</b> submitted ${t}: ${esc(d.summary || "")}`;
+      case "landed": return `${t} landed clean on trunk (${(d.files || []).map(esc).join(", ")})`;
+      case "auto-merged": return `${t} auto-merged (${esc(d.kind)}) onto trunk: ${(d.files || []).map(esc).join(", ")}`;
+      case "replay": return `${t} conflicted: ${esc(d.reason)}. Sent back for replay as attempt ${d.attempt + 1}.`;
+      case "prevented": return `${t} held back: its scope overlaps an active claim`;
+      case "rejected": return `${t} rejected: ${esc(d.reason)}`;
+      case "expired": return `lease expired on ${t}; <b>${esc(d.agent)}</b> can no longer push`;
+      case "revoked": return `<b>${esc(d.agent)}</b> revoked: token dead, ${d.changes.length} change(s) released`;
+      case "released": return `<b>${esc(d.agent)}</b> released ${t}: ${esc(d.reason)}`;
+      case "renewed": return `<b>${esc(d.agent)}</b> renewed its lease (${d.lease}s)`;
+      case "weave": return `weave <span class="bd-code">${esc(d.weave)}</span>: ${d.count} attempt(s), ${d.landed} landed, trunk ${short(d.trunk_sha)}`;
+      case "swarm": return `spawned ${d.n} ${d.kind === "llm" ? "model agents" : "synthetic bots"}`;
+      case "stopped": return `stopped ${d.agents} agents`;
+      case "mode": return `mode set to ${esc(d.mode)}`;
+      case "review": return `review ${d.enabled ? "enabled" : "disabled"}`;
+      case "init": return `project reset: trunk <span class="bd-code">${esc(d.trunk)}</span> seeded with ${d.changes} changes`;
+      case "proposed": return `<b>${esc(d.by)}</b> proposed ${t}`;
+      case "error": return `error in ${esc(d.where)} for ${esc(d.agent)}: ${esc(d.message)}`;
+      default: return `${esc(ev.kind)} ${esc(JSON.stringify(d)).slice(0, 120)}`;
+    }
+  }
+
+  function renderFeed() {
+    const html = feedItems.slice(0, 60).map((ev) => `<div class="item" data-kind="${esc(ev.kind)}"><span class="k"></span><span>${describe(ev)}</span><span class="t">${ago(ev.ts)}</span></div>`).join("");
+    $("#feed").innerHTML = html || `<div class="empty">Nothing yet. Spawn some agents.</div>`;
+    $("#feed-full").innerHTML = feedItems.slice(0, 300).map((ev) => `<div class="item" data-kind="${esc(ev.kind)}"><span class="k"></span><span>${describe(ev)}</span><span class="t">${new Date(ev.ts).toLocaleTimeString()}</span></div>`).join("") || `<div class="empty">Nothing yet.</div>`;
+  }
+
+  function renderStats() {
+    const s = state.stats, cc = state.change_counts || {};
+    const cells = [
+      ["Agents working", s.agents, "info"], ["Strands made", s.strands, ""],
+      ["Landed", s.landed, "success"], ["Auto-merged", s.automerged, "success"],
+      ["Replayed", s.replayed, "danger"], ["Held back", s.prevented, "warning"],
+      ["Rejected", s.rejected, "danger"], ["Leases expired", s.expired, "warning"],
+      ["Weaves", s.weaves, "brand"], ["Open changes", cc.open || 0, ""],
+    ];
+    $("#stats").innerHTML = cells.map(([l, v, tone]) => `<div class="stat" data-tone="${tone}"><b>${Number(v || 0).toLocaleString()}</b><span>${l}</span></div>`).join("");
+  }
+
+  function renderChanges() {
+    const list = (state.changes || []).filter((c) => {
+      if (filter === "all") return true;
+      if (filter === "trouble") return c.status === "rejected" || c.status === "failed" || (c.attempt > 0 && c.hint && c.status !== "landed");
+      return c.status === filter;
+    });
+    $("#count-changes").textContent = (state.changes || []).length;
+    if (!list.length) { $("#changes").innerHTML = `<div class="empty">No changes here.</div>`; return; }
+    const claimsBy = Object.fromEntries((state.claims || []).map((c) => [c.change_id, c]));
+    $("#changes").innerHTML = list.slice(0, 250).map((c) => {
+      const [st, label] = badgeFor(c);
+      const claim = claimsBy[c.id];
+      const who = claim ? claim.agent_id : (c.status === "landed" ? "" : "");
+      const meta = [who ? `<span>${esc(who)}</span>` : "", claim ? `<span class="bd-code">${esc(claim.strand)}</span>` : `<span class="bd-code">${c.scope.length} file${c.scope.length === 1 ? "" : "s"}</span>`, c.attempt > 1 ? `<span>attempt ${c.attempt}</span>` : "", c.landed_sha ? `<span class="bd-code">${short(c.landed_sha)}</span>` : ""].filter(Boolean).join("");
+      return `<button class="bd-row" data-id="${esc(c.id)}" aria-selected="${selected === c.id}"><img class="bd-icon" src="/brand/${ICON[c.status] || "branch"}.svg" alt=""><div><div class="bd-row-title">${esc(c.title)}</div><div class="bd-row-meta">${meta}</div></div><span class="bd-badge" data-status="${st}">${label}</span><span class="bd-row-age">${ago(c.updated_at)}</span></button>`;
+    }).join("");
+  }
+
+  function renderAgents() {
+    const agents = state.agents || [];
+    const counts = state.agent_counts || {};
+    $("#count-agents").textContent = Object.values(counts).reduce((a, b) => a + b, 0);
+    if (!agents.length) { $("#agents").innerHTML = `<div class="empty">No agents yet.</div>`; return; }
+    $("#agents").innerHTML = agents.map((a) => `<button class="agent" data-agent="${esc(a.id)}" data-status="${esc(a.status)}" title="Revoke ${esc(a.id)}"><span class="name">${esc(a.id)}</span><span class="meta"><span>${esc(a.kind)}${a.model ? " · " + esc(String(a.model).split("/").pop()) : ""}</span><span class="bd-badge" data-status="${a.status === "working" ? "working" : a.status === "done" ? "merged" : a.status === "revoked" || a.status === "failed" ? "conflict" : a.status === "expired" ? "stale" : ""}" data-dot="false">${esc(a.status)}</span></span><span class="meta"><span>${a.done} landed</span><span>${ago(a.last_seen)}</span></span></button>`).join("");
+  }
+
+  function render() {
+    if (!state) return;
+    const st = state.settings;
+    $("#trunk-name").textContent = st.trunk_name || "not initialised";
+    $("#trunk-sha").textContent = short(st.trunk_sha);
+    $("#subtitle").textContent = st.trunk_name ? `${(state.change_counts || {}).landed || 0} changes landed · ${state.stats.weaves} weaves · trunk ${short(st.trunk_sha)}` : "Reset the project to seed trunk.";
+    for (const b of $("#mode-seg").querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.mode === st.mode));
+    $("#mode-help").textContent = st.mode === "claims" ? "Overlapping scopes wait their turn." : "Anyone can claim anything; conflicts are replayed.";
+    for (const b of $("#review-seg").querySelectorAll("button")) b.setAttribute("aria-pressed", String((b.dataset.review === "on") === Boolean(st.review)));
+    renderStats(); renderChanges(); renderAgents();
+    if (!feedItems.length && state.events) { feedItems = state.events.slice(); renderFeed(); }
+  }
+
+  async function load() {
+    try { state = await api("/api/state"); render(); } catch (e) { $("#subtitle").textContent = `Cannot load state: ${e.message}`; }
+  }
+  function scheduleLoad() { if (loadTimer) return; loadTimer = setTimeout(() => { loadTimer = null; load(); }, 700); }
+  function reloadPreview() { if (previewTimer) return; previewTimer = setTimeout(() => { previewTimer = null; const f = $("#preview"); f.src = `/site/main/?t=${Date.now()}`; $("#preview-ref").textContent = short(state && state.settings.trunk_sha); }, 900); }
+
+  let toastCount = 0;
+  function toast(kind, html) {
+    if (toastCount >= 3) return;
+    toastCount++;
+    const el = document.createElement("div");
+    el.className = "toast";
+    el.innerHTML = `<span class="bd-badge" data-status="${kind}" data-dot="false">${kind === "merged" ? "Landed" : kind === "conflict" ? "Conflict" : kind === "stale" ? "Held" : "Note"}</span><span>${html}</span>`;
+    $("#toasts").appendChild(el);
+    setTimeout(() => { el.remove(); toastCount--; }, 3200);
+  }
+
+  function connect() {
+    const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+    ws.onmessage = (m) => {
+      let ev; try { ev = JSON.parse(m.data); } catch { return; }
+      if (ev.type !== "event") return;
+      feedItems.unshift(ev); if (feedItems.length > 400) feedItems.length = 400;
+      renderFeed();
+      const d = ev.data || {};
+      if (ev.kind === "landed" || ev.kind === "auto-merged") toast("merged", `${esc(d.title)}`);
+      else if (ev.kind === "replay") toast("conflict", `${esc(d.title)} → replay`);
+      else if (ev.kind === "rejected") toast("conflict", `${esc(d.title)} rejected`);
+      else if (ev.kind === "prevented") toast("stale", `${esc(d.title)} waits for a scope`);
+      else if (ev.kind === "revoked") toast("conflict", `${esc(d.agent)} revoked`);
+      if (ev.kind === "weave" || ev.kind === "init") reloadPreview();
+      scheduleLoad();
+    };
+    ws.onclose = () => setTimeout(connect, 2000);
+    ws.onerror = () => ws.close();
+    setInterval(() => { if (ws.readyState === 1) ws.send("ping"); }, 25000);
+  }
+
+  // ---- drawer -----------------------------------------------------------------
+  function closeDrawer() { $("#drawer").dataset.open = "false"; $("#scrim").dataset.open = "false"; selected = null; renderChanges(); }
+  async function openChange(id) {
+    selected = id; renderChanges();
+    const d = await api(`/api/changes/${id}`);
+    const c = d.change; const [st, label] = badgeFor(c);
+    const attempts = (d.attempts || []).map((a) => {
+      const review = a.review ? JSON.parse(a.review) : null; const files = a.files ? JSON.parse(a.files) : [];
+      const outcome = a.outcome || (d.claim && d.claim.attempt_id === a.id ? "in progress" : "pending");
+      const tone = outcome === "landed" || outcome === "auto-merged" ? "merged" : outcome === "replay" || outcome === "rejected" || outcome === "failed" ? "conflict" : outcome === "expired" || outcome === "released" ? "stale" : "working";
+      return `<div class="attempt"><header><b>Attempt ${a.n}</b> <span class="bd-badge" data-status="${tone}" data-dot="false">${esc(outcome)}</span></header>
+        <dl class="kv"><dt>agent</dt><dd>${esc(a.agent_id)}${a.model ? ` · <span class="bd-code">${esc(String(a.model).split("/").pop())}</span>` : ""}</dd>
+        <dt>strand</dt><dd><span class="bd-code">${esc(a.strand)}</span> <a href="/site/${esc(a.strand)}/" target="_blank">preview</a></dd>
+        <dt>base → head</dt><dd><span class="bd-code">${short(a.base_sha)}</span> → <span class="bd-code">${short(a.head_sha)}</span>${a.trunk_sha ? ` → trunk <span class="bd-code">${short(a.trunk_sha)}</span>` : ""}</dd>
+        ${a.summary ? `<dt>summary</dt><dd>${esc(a.summary)}</dd>` : ""}${a.rationale ? `<dt>rationale</dt><dd>${esc(a.rationale)}</dd>` : ""}
+        ${files.length ? `<dt>files</dt><dd>${files.map((f) => `<span class="bd-code">${esc(f)}</span>`).join(" ")}</dd>` : ""}
+        ${review ? `<dt>review</dt><dd>${review.conforms ? "conforms" : "does not conform"} · risk ${esc(review.risk)} · ${esc(review.notes)}</dd>` : ""}
+        ${a.reason ? `<dt>outcome</dt><dd>${esc(a.reason)}</dd>` : ""}</dl></div>`;
+    }).join("");
+    $("#drawer").innerHTML = `<header style="display:flex;justify-content:space-between;align-items:center;gap:12px"><h2 style="font-size:20px;line-height:26px">${esc(c.title)}</h2><button class="bd-button" data-variant="ghost" data-size="sm" id="drawer-close">Close</button></header>
+      <div><span class="bd-badge" data-status="${st}">${label}</span> <span class="caption">${esc(c.id)} · ${c.attempt} attempt${c.attempt === 1 ? "" : "s"} · by ${esc(c.created_by)} · ${ago(c.updated_at)}</span></div>
+      <p style="margin:0">${esc(c.body)}</p>
+      <dl class="kv"><dt>scope</dt><dd>${c.scope.map((s) => `<span class="bd-code">${esc(s)}</span>`).join(" ")}</dd><dt>acceptance</dt><dd>${esc(c.accept || "–")}</dd>${c.hint ? `<dt>hint</dt><dd>${esc(c.hint)}</dd>` : ""}${c.landed_sha ? `<dt>landed as</dt><dd><span class="bd-code">${esc(c.landed_sha)}</span></dd>` : ""}</dl>
+      ${d.claim ? `<div class="row-actions"><button class="bd-button" data-variant="danger" data-size="sm" id="drawer-revoke" data-agent="${esc(d.claim.agent_id)}">Revoke ${esc(d.claim.agent_id)}</button><a class="bd-button" data-variant="secondary" data-size="sm" href="/site/${esc(d.claim.strand)}/" target="_blank">Preview strand</a></div>` : ""}
+      <h3 style="font-size:16px">Attempts</h3>${attempts || `<p class="caption">No attempts yet.</p>`}`;
+    $("#drawer").dataset.open = "true"; $("#scrim").dataset.open = "true";
+    $("#drawer-close").onclick = closeDrawer;
+    const rv = $("#drawer-revoke"); if (rv) rv.onclick = async () => { await api("/api/revoke", { agent: rv.dataset.agent }); openChange(id); };
+  }
+
+  async function renderLog() {
+    const log = await api("/api/log?limit=60");
+    $("#log").innerHTML = log.map((e) => { const t = e.trailers || {}; const merge = t.Merge || ""; const tone = merge === "clean" ? "merged" : merge ? "working" : ""; return `<div class="bd-row" style="cursor:default"><img class="bd-icon" src="/brand/commit.svg" alt=""><div><div class="bd-row-title">${esc(e.title)}</div><div class="bd-row-meta">${t.Agent ? `<span>${esc(t.Agent)}</span>` : ""}${t["Reviewed-By"] ? `<span>reviewed ${esc(t["Reviewed-By"].split(" ").slice(-2).join(" "))}</span>` : ""}${t["Replay-Of"] ? `<span class="bd-badge" data-status="stale" data-dot="false">replay</span>` : ""}${t.Weave ? `<span class="bd-code">${esc(t.Weave)}</span>` : ""}</div></div><span class="bd-code">${short(e.hash)}</span></div>`; }).join("") || `<div class="empty">Trunk is empty.</div>`;
+  }
+
+  // ---- wiring ----------------------------------------------------------------------
+  $("#changes").addEventListener("click", (e) => { const row = e.target.closest(".bd-row"); if (row) openChange(row.dataset.id); });
+  $("#agents").addEventListener("click", async (e) => { const a = e.target.closest(".agent"); if (!a) return; if (!confirm(`Revoke ${a.dataset.agent}? Its token dies now.`)) return; await api("/api/revoke", { agent: a.dataset.agent }); scheduleLoad(); });
+  $("#scrim").onclick = closeDrawer;
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+  for (const b of document.querySelectorAll(".bd-tab")) b.onclick = () => { tab = b.dataset.tab; for (const x of document.querySelectorAll(".bd-tab")) x.setAttribute("aria-selected", String(x === b)); for (const s of document.querySelectorAll(".tab")) s.hidden = s.id !== `tab-${tab}`; if (tab === "trunk") renderLog(); };
+  $("#filter-seg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; filter = b.dataset.filter; for (const x of $("#filter-seg").querySelectorAll("button")) x.setAttribute("aria-pressed", String(x === b)); renderChanges(); });
+  $("#mode-seg").addEventListener("click", async (e) => { const b = e.target.closest("button"); if (!b) return; await api("/api/mode", { mode: b.dataset.mode }); load(); });
+  $("#review-seg").addEventListener("click", async (e) => { const b = e.target.closest("button"); if (!b) return; await api("/api/review", { enabled: b.dataset.review === "on" }); load(); });
+  const busy = async (btn, fn) => { btn.disabled = true; try { await fn(); } catch (e) { alert(e.message); } finally { btn.disabled = false; scheduleLoad(); } };
+  $("#btn-llm").onclick = (e) => busy(e.target, () => api("/api/swarm", { n: 8, kind: "llm", maxChanges: 2 }));
+  $("#btn-bots").onclick = (e) => busy(e.target, () => api("/api/swarm", { n: 200, kind: "synthetic", maxChanges: 1 }));
+  $("#btn-bots-1k").onclick = (e) => busy(e.target, () => api("/api/swarm", { n: 1000, kind: "synthetic", maxChanges: 1 }));
+  $("#btn-stop").onclick = (e) => busy(e.target, () => api("/api/stop", {}));
+  $("#btn-reset").onclick = (e) => { if (!confirm("Create a fresh trunk and backlog? Agents keep running until stopped.")) return; busy(e.target, async () => { feedItems = []; await api("/api/project/init", { force: true }); reloadPreview(); }); };
+  $("#btn-reload").onclick = () => { previewTimer = null; reloadPreview(); };
+  $("#btn-propose").onclick = async (e) => {
+    const title = prompt("Change title (what should happen)?"); if (!title) return;
+    const body = prompt("Details for the agent:", "") ?? "";
+    const scope = prompt("Scope: files it may touch, comma separated", "sections/hero.html"); if (!scope) return;
+    const accept = prompt("Acceptance note:", "") ?? "";
+    await busy(e.target, () => api("/api/changes", { title, body, scope: scope.split(",").map((s) => s.trim()).filter(Boolean), accept, by: "you" }));
+  };
+  $("#btn-clone").onclick = async () => { const t = await api("/api/trunk/token"); const pre = $("#clone-cmd"); pre.hidden = false; pre.textContent = `${t.clone}\n# read-only token, valid 15 minutes\ncd trunk && git log --format='%h %s%n%(trailers)' -5`; };
+  $("#mcp-cmd").textContent = `claude mcp add --transport http braid ${location.origin}/mcp`;
+  setInterval(() => { if (state) { renderChanges(); renderFeed(); } }, 15000);
+
+  load(); connect();
+})();
+</script>
+</body>
+</html>

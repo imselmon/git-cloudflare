@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "braid",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/ws", "/site/*", "/mcp", "/mcp/*", "/spike/*"]
+  },
+  "artifacts": [{ "binding": "ARTIFACTS", "namespace": "braid", "remote": true }],
+  "ai": { "binding": "AI" },
+  "durable_objects": {
+    "bindings": [
+      { "name": "COORDINATOR", "class_name": "Coordinator" },
+      { "name": "INTEGRATOR", "class_name": "Integrator" },
+      { "name": "AGENT", "class_name": "AgentRunner" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Coordinator", "Integrator", "AgentRunner"] }],
+  "limits": { "cpu_ms": 30000 },
+  "observability": { "enabled": true }
+}

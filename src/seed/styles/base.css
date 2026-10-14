@@ -1,0 +1,35 @@
+:root {
+  --accent: #f6821f;
+  --ink: #0f1420;
+  --paper: #fffdf9;
+  --muted: #4a5263;
+  --line: #e2ddd4;
+  --radius: 12px;
+  --max: 960px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body { font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; color: var(--ink); background: var(--paper); line-height: 1.5; }
+a { color: inherit; }
+#site-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 24px; border-bottom: 1px solid var(--line); background: var(--paper); }
+#site-header .brand { font-weight: 600; text-decoration: none; font-size: 18px; }
+#site-nav { display: flex; gap: 16px; }
+#site-nav a { text-decoration: none; color: var(--muted); font-weight: 500; }
+#site-nav a:hover { color: var(--accent); }
+main { max-width: var(--max); margin: 0 auto; padding: 24px; }
+.section { padding: 32px 0; border-bottom: 1px solid var(--line); }
+.section:last-child { border-bottom: 0; }
+.section h1 { font-size: 44px; line-height: 1.1; margin: 0 0 12px; letter-spacing: -0.015em; }
+.section h2 { font-size: 28px; line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.01em; }
+.section p { margin: 0 0 12px; max-width: 64ch; }
+.btn { display: inline-block; background: var(--accent); color: var(--ink); padding: 10px 16px; border-radius: 8px; text-decoration: none; font-weight: 500; }
+.btn:hover { filter: brightness(0.95); }
+.missing { color: var(--muted); font-style: italic; }
+#site-footer { max-width: var(--max); margin: 0 auto; padding: 24px; color: var(--muted); font-size: 13px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+.sponsor-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.sponsor { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; background: #fff; }
+.sponsor .tier { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+.sponsor[data-tier="gold"] { border-color: var(--accent); }

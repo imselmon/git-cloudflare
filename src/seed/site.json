@@ -1,0 +1,29 @@
+{
+  "title": "Loom Conf 2026",
+  "tagline": "A conference about agents that build.",
+  "sections": [
+    "hero",
+    "about",
+    "schedule",
+    "sponsors"
+  ],
+  "nav": [
+    {
+      "label": "About",
+      "href": "#about"
+    },
+    {
+      "label": "Schedule",
+      "href": "#schedule"
+    },
+    {
+      "label": "Sponsors",
+      "href": "#sponsors"
+    }
+  ],
+  "theme": {
+    "accent": "#f6821f",
+    "ink": "#0f1420",
+    "paper": "#fffdf9"
+  }
+}
