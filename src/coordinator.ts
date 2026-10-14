@@ -160,8 +160,8 @@ export class Coordinator extends DurableObject<Env> {
     this.set("trunk_remote", created.remote);
     this.set("trunk_sha", sha);
     this.set("seeded_at", String(Date.now()));
-    if (!this.get("mode")) this.set("mode", "claims");
-    if (!this.get("review")) this.set("review", "on");
+    this.set("mode", "claims"); // a fresh project starts with the safe defaults
+    this.set("review", "on");
     await this.env.INTEGRATOR.get(this.env.INTEGRATOR.idFromName("main")).reset({ trunk_name: trunkName, remote: created.remote, sha });
     this.event("init", { trunk: trunkName, sha, changes: SEED_CHANGES.length });
     return { trunk: trunkName, remote: created.remote, sha, seeded: true };
