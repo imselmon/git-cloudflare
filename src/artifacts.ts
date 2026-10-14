@@ -8,7 +8,7 @@ export type RepoHandle = Awaited<ReturnType<Artifacts["get"]>>;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** `get()` throws while a fork or import is still in progress; wait for it. */
-export async function getRepo(ns: Artifacts, name: string, tries = 20): Promise<RepoHandle> {
+export async function getRepo(ns: Artifacts, name: string, tries = 40): Promise<RepoHandle> {
   let lastErr: unknown;
   for (let i = 0; i < tries; i++) {
     try {

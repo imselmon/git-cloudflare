@@ -38,7 +38,7 @@ async function record(name, seconds, fn) {
 }
 
 const card = (file) => async (page) => { await page.goto(`file://${CARDS}${file}`); };
-const dash = async (page, hash = "") => { await page.goto(`${BASE}/${hash}`, { waitUntil: "networkidle" }); await page.waitForSelector("#changes .bd-row, #changes .empty"); await sleep(1500); };
+const dash = async (page, hash = "") => { await page.goto(`${BASE}/?v=${Date.now()}${hash}`, { waitUntil: "domcontentloaded" }); await page.waitForSelector(hash.startsWith("#code") ? "#tree .bd-row" : "#changes .bd-row, #changes .empty"); await sleep(1500); };
 const closeDrawer = async (page) => { await page.keyboard.press("Escape"); await sleep(400); };
 const stateUntil = async (pred, maxMs) => { const t0 = Date.now(); for (;;) { const s = await api("/api/state"); if (pred(s)) return s; if (Date.now() - t0 > maxMs) return s; await sleep(2000); } };
 
@@ -87,14 +87,6 @@ await record("s06_revoke", 24, async (page) => {
 });
 await record("s06_term", 16, card("revoke.html"));
 
-// ---- live: 1,000 bots ----
-await record("s07_swarm", 110, async (page) => {
-  await dash(page);
-  await page.click("#btn-bots-1k");
-  await sleep(70000);
-  await page.frameLocator("#preview").locator("#sponsors").scrollIntoViewIfNeeded().catch(() => {});
-});
-
 // ---- live: code and commits ----
 await record("s08_code", 42, async (page) => {
   await dash(page, "#code/main/");
@@ -112,6 +104,14 @@ await record("s08_code", 42, async (page) => {
   await page.locator("#drawer").evaluate((d) => d.scrollTo({ top: 700, behavior: "smooth" }));
   await sleep(5000);
   await page.locator("#drawer").evaluate((d) => d.scrollTo({ top: 1600, behavior: "smooth" }));
+});
+
+// ---- live: 1,000 bots ----
+await record("s07_swarm", 110, async (page) => {
+  await dash(page);
+  await page.click("#btn-bots-1k");
+  await sleep(70000);
+  await page.frameLocator("#preview").locator("#sponsors").scrollIntoViewIfNeeded().catch(() => {});
 });
 
 // ---- cards ----
