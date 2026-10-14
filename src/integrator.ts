@@ -121,7 +121,7 @@ export class Integrator extends DurableObject<Env> {
     try {
       using repo = await getRepo(this.env.ARTIFACTS, item.strand);
       const changes = await treeDiff(repo, item.base_sha, item.head_sha);
-      if (changes.length === 0) return { item, reject: "the submitted commit changes nothing" };
+      if (changes.length === 0) return { item, files: [] }; // trunk already satisfies the intent: lands as a no-op
       const outside = changes.filter((c) => !inScope(c.path, item.scope)).map((c) => c.path);
       if (outside.length) return { item, reject: `touched files outside the declared scope: ${outside.join(", ")}` };
       if (changes.length > 40) return { item, reject: `too many files changed (${changes.length})` };
@@ -177,7 +177,7 @@ export class Integrator extends DurableObject<Env> {
         continue;
       }
       let review: ReviewResult | null = null;
-      if (item.review) {
+      if (item.review && p.files.length) {
         review = await this.review(item, p.files);
         if (review && !review.conforms) {
           results.push({ attempt_id: item.attempt_id, change_id: item.change_id, outcome: "rejected", reason: `reviewer: ${review.notes}`, review, files: p.files.map((f) => f.path) });
@@ -205,7 +205,7 @@ export class Integrator extends DurableObject<Env> {
       }
       const paths = Object.keys(merged);
       if (!paths.length) {
-        results.push({ attempt_id: item.attempt_id, change_id: item.change_id, outcome: "landed", reason: "trunk already contained this change", files: [], trunk_sha: await headSha(ws), review: review ?? undefined, kind: "clean" });
+        results.push({ attempt_id: item.attempt_id, change_id: item.change_id, outcome: "landed", reason: "trunk already satisfied this change; nothing to weave", files: [], trunk_sha: await headSha(ws), review: review ?? undefined, kind: "clean" });
         continue;
       }
       const author = { name: item.agent_id, email: `${item.agent_id}@agents.braid.dev` };

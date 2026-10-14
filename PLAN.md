@@ -1,4 +1,6 @@
-# Tributary: build plan
+# Braid: build plan
+
+> Historical note: this plan was written under the working title "Tributary". The product shipped as **Braid**, using the Braid design system (strands, changes, weaves). See README.md for what was built and DEMO.md for the video script.
 
 > **Agents ship intents, not pull requests.**
 > Built on Cloudflare Workers, Durable Objects, Workers AI and **Artifacts** for the

@@ -9,7 +9,7 @@ import type { AgentKind, Change } from "./types";
 import { BRANCH } from "./types";
 import { clone, commitFiles, push, type Workspace } from "./git";
 import { inScope } from "./artifacts";
-import { chat, extractJson, editMessages, EDIT_MODEL, type EditResult } from "./llm";
+import { chat, extractJson, editMessages, EDIT_MODEL, FAST_MODEL, type EditResult } from "./llm";
 
 interface RunnerState {
   agent: string;
@@ -105,9 +105,16 @@ export class AgentRunner extends DurableObject<Env> {
       const files: Record<string, string> = {};
       for (const [p, c] of Object.entries(edit.files)) if (inScope(p, change.scope) && typeof c === "string") files[p] = c;
       if (!Object.keys(files).length) throw new Error("the edit produced no files inside the declared scope");
+      const latest = await this.ctx.storage.get<RunnerState>("state");
+      if (latest && !latest.running) throw new Error("agent was stopped before it could push");
+      let token = claim.token;
+      if (claim.lease_expires - Date.now() < 60_000) {
+        const renewed = await coord.renew({ changeId: change.id, agent: st.agent, lease: st.lease });
+        token = renewed.token;
+      }
       const message = `${change.title}\n\n${edit.summary}\n\nChange-Id: ${change.id}\nAttempt: ${change.attempt}\nAgent: ${st.agent}\n`;
       const sha = await commitFiles(ws, files, message, { name: st.agent, email: `${st.agent}@agents.braid.dev` });
-      await push(ws, { remote: claim.remote, token: claim.token, branch: BRANCH });
+      await push(ws, { remote: claim.remote, token, branch: BRANCH });
       await coord.submit({ changeId: change.id, agent: st.agent, head_sha: sha, summary: edit.summary, rationale: edit.rationale, model: st.model });
       st.done++;
     } catch (e) {
@@ -149,8 +156,15 @@ async function llmEdit(env: Env, change: Change, ws: Workspace, agent: string, m
   for (const p of CONTEXT_FILES) if (!(p in files)) context[p] = await ws.fs.readText(`${ws.dir}/${p}`);
   const messages = editMessages(change, files, context, agent);
   let last = "";
-  for (let attempt = 0; attempt < 2; attempt++) {
-    last = await chat(env, model, messages, { json: true, max_tokens: 4000, temperature: attempt === 0 ? 0.3 : 0.6 });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    // Third try falls back to the fast model so a slow or flaky model never burns the lease.
+    const m = attempt === 2 ? FAST_MODEL : model;
+    try {
+      last = await chat(env, m, messages, { json: true, max_tokens: 4000, temperature: attempt === 0 ? 0.3 : 0.6, timeoutMs: attempt === 0 ? 75_000 : 60_000 });
+    } catch (e) {
+      last = `error: ${String((e as Error).message)}`;
+      continue;
+    }
     const parsed = extractJson<EditResult>(last);
     if (parsed && parsed.files && typeof parsed.files === "object") {
       const out: Record<string, string> = {};

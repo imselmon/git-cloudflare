@@ -7,17 +7,25 @@ export const FAST_MODEL = REVIEW_MODEL;
 
 type Msg = { role: "system" | "user" | "assistant"; content: string };
 
-export async function chat(env: Env, model: string, messages: Msg[], opts: { max_tokens?: number; temperature?: number; json?: boolean } = {}): Promise<string> {
+export async function chat(env: Env, model: string, messages: Msg[], opts: { max_tokens?: number; temperature?: number; json?: boolean; timeoutMs?: number } = {}): Promise<string> {
   const input: Record<string, unknown> = { messages, max_tokens: opts.max_tokens ?? 3000, temperature: opts.temperature ?? 0.3 };
   if (opts.json) input.response_format = { type: "json_object" };
+  const run = (m: string, i: unknown) => (env.AI as unknown as { run: (m: string, i: unknown) => Promise<unknown> }).run(m, i);
+  const timeout = opts.timeoutMs ?? 90_000;
+  const withTimeout = <T>(p: Promise<T>) =>
+    new Promise<T>((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error(`model ${model} timed out after ${timeout} ms`)), timeout);
+      p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+    });
   let result: unknown;
   try {
-    result = await (env.AI as unknown as { run: (m: string, i: unknown) => Promise<unknown> }).run(model, input);
+    result = await withTimeout(run(model, input));
   } catch (e) {
+    if (/timed out/.test(String((e as Error).message))) throw e;
     // Some models reject response_format; retry without it.
     if (opts.json) {
       delete input.response_format;
-      result = await (env.AI as unknown as { run: (m: string, i: unknown) => Promise<unknown> }).run(model, input);
+      result = await withTimeout(run(model, input));
     } else throw e;
   }
   return extractText(result);
