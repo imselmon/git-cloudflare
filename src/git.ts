@@ -58,6 +58,23 @@ export async function clone(opts: { remote: string; token: string; branch?: stri
   return { fs, dir };
 }
 
+/** Fetch one ref (for example refs/notes/braid) into the workspace so later commits on it fast-forward. Returns false if the remote lacks it. */
+export async function fetchRef(ws: Workspace, opts: { remote: string; token: string; ref: string }): Promise<boolean> {
+  try {
+    await git.fetch({ fs: ws.fs, http, dir: ws.dir, url: opts.remote, ref: opts.ref, remoteRef: opts.ref, singleBranch: true, depth: 1, tags: false, onAuth: onAuth(opts.token) });
+    const oid = await git.resolveRef({ fs: ws.fs, dir: ws.dir, ref: opts.ref }).catch(() => null);
+    if (!oid) {
+      // fetch stored it under the remote-tracking name; pin the local ref to it
+      const remoteOid = await git.resolveRef({ fs: ws.fs, dir: ws.dir, ref: `refs/remotes/origin/${opts.ref.replace(/^refs\//, "")}` }).catch(() => null);
+      if (!remoteOid) return false;
+      await git.writeRef({ fs: ws.fs, dir: ws.dir, ref: opts.ref, value: remoteOid, force: true });
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Write (or delete, when the value is null) files, stage them and commit. Returns the new sha. */
 export async function commitFiles(
   ws: Workspace,

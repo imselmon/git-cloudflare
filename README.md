@@ -24,7 +24,8 @@ Open the dashboard and press **Spawn 8 agents**. Eight Workers AI agents (GLM-5.
 - **Claims mode** holds back changes whose scope overlaps an active claim (prevention). **Optimistic mode** lets everyone claim anything and replays the losers (recovery). Flip the switch while agents run.
 - Click an agent and **revoke** it: the token dies that instant.
 - Click a change to see every attempt, its strand (with a live preview of that strand's site), the reviewer's verdict, and why it landed, replayed or was rejected.
-- The **Trunk** tab reads history straight from Artifacts, no clone, and gives you a read-only clone command.
+- The **Code** tab is a file browser over any ref: trunk, a commit, or an agent's strand. Every byte is read from Artifacts, no clone. Each file has a **Why this file?** button that lists the changes, agents, models and reviews that shaped it.
+- The **Commits** tab reads history straight from Artifacts. A commit page shows the diff, the provenance trailers, Braid's record of the intent, rationale and review, and the git note. Links are shareable (`#code/main/sections/hero.html`, `#commit/<sha>`, `#change/<id>`).
 
 ## Connect your own agent
 
@@ -95,6 +96,7 @@ The Artifacts namespace (`braid`) is created on first use. The demo site that ag
 | `POST /api/release` / `POST /api/revoke` | Give a claim back / kill an agent's token |
 | `POST /api/mode` `{mode: claims \| optimistic}` · `POST /api/review` `{enabled}` | Coordination settings |
 | `POST /api/swarm` `{n, kind: llm \| synthetic}` · `POST /api/stop` | Spawn or stop agents |
+| `GET /api/tree?ref&path`, `GET /api/file?ref&path`, `GET /api/commit/:sha` | Code browser and commit pages, read from Artifacts |
 | `GET /api/log`, `GET /api/why?path=`, `GET /api/changes/:id`, `GET /api/attempts` | Provenance |
 | `GET /site/main/…`, `/site/<sha>/…`, `/site/strand-…/…` | Live previews from Artifacts |
 | `POST /mcp` | MCP server (streamable HTTP) |

@@ -69,8 +69,9 @@
     </header>
     <nav class="bd-tabs" role="tablist">
       <button class="bd-tab" role="tab" aria-selected="true" data-tab="changes">Changes <span class="bd-count" id="count-changes">0</span></button>
+      <button class="bd-tab" role="tab" aria-selected="false" data-tab="code">Code</button>
+      <button class="bd-tab" role="tab" aria-selected="false" data-tab="trunk">Commits</button>
       <button class="bd-tab" role="tab" aria-selected="false" data-tab="agents">Agents <span class="bd-count" id="count-agents">0</span></button>
-      <button class="bd-tab" role="tab" aria-selected="false" data-tab="trunk">Trunk</button>
       <button class="bd-tab" role="tab" aria-selected="false" data-tab="activity">Activity</button>
     </nav>
     <section id="tab-changes" class="tab">
@@ -88,7 +89,22 @@
       <p class="caption" style="margin:0 0 12px">Click an agent to revoke its lease. Its token dies instantly and its next push fails.</p>
       <div class="agent-grid" id="agents"></div>
     </section>
+    <section id="tab-code" class="tab" hidden>
+      <div class="code-bar">
+        <label class="caption" for="ref-input">ref</label>
+        <input class="bd-input" id="ref-input" list="ref-list" value="main" spellcheck="false" aria-label="Ref: main, a commit, or a strand">
+        <datalist id="ref-list"></datalist>
+        <button class="bd-button" data-variant="secondary" data-size="sm" id="btn-ref">Browse</button>
+        <span class="caption" id="code-sha"></span>
+      </div>
+      <nav class="crumbs" id="crumbs" aria-label="Path"></nav>
+      <div class="code-layout" style="margin-top:12px">
+        <div class="bd-list" id="tree"><div class="empty">Loading…</div></div>
+        <div class="viewer" id="viewer"><div class="empty">Pick a file. Every byte here is read from Artifacts at the chosen ref, no clone.</div></div>
+      </div>
+    </section>
     <section id="tab-trunk" class="tab" hidden>
+      <p class="caption" style="margin:0 0 12px">Trunk history read straight from Artifacts. Click a commit for its diff, trailers and note.</p>
       <div class="row-actions" style="margin-bottom:12px">
         <button class="bd-button" data-variant="secondary" data-size="sm" id="btn-clone">Show clone command</button>
         <a class="bd-button" data-variant="ghost" data-size="sm" href="/site/main/" target="_blank">Open live site</a>
@@ -266,7 +282,7 @@
   }
 
   // ---- drawer -----------------------------------------------------------------
-  function closeDrawer() { $("#drawer").dataset.open = "false"; $("#scrim").dataset.open = "false"; selected = null; renderChanges(); }
+  function closeDrawer() { $("#drawer").dataset.open = "false"; $("#scrim").dataset.open = "false"; selected = null; renderChanges(); if (/^#(commit|change)\//.test(location.hash)) setHash(tab === "code" ? `#code/${code.ref}/${code.file || code.path}` : "#" + tab); }
   async function openChange(id) {
     selected = id; renderChanges();
     const d = await api(`/api/changes/${id}`);
@@ -278,7 +294,7 @@
       return `<div class="attempt"><header><b>Attempt ${a.n}</b> <span class="bd-badge" data-status="${tone}" data-dot="false">${esc(outcome)}</span></header>
         <dl class="kv"><dt>agent</dt><dd>${esc(a.agent_id)}${a.model ? ` · <span class="bd-code">${esc(String(a.model).split("/").pop())}</span>` : ""}</dd>
         <dt>strand</dt><dd><span class="bd-code">${esc(a.strand)}</span> <a href="/site/${esc(a.strand)}/" target="_blank">preview</a></dd>
-        <dt>base → head</dt><dd><span class="bd-code">${short(a.base_sha)}</span> → <span class="bd-code">${short(a.head_sha)}</span>${a.trunk_sha ? ` → trunk <span class="bd-code">${short(a.trunk_sha)}</span>` : ""}</dd>
+        <dt>base → head</dt><dd><span class="bd-code">${short(a.base_sha)}</span> → <span class="bd-code">${short(a.head_sha)}</span>${a.trunk_sha ? ` → trunk <a data-commit="${esc(a.trunk_sha)}" class="bd-code">${short(a.trunk_sha)}</a>` : ""}</dd>
         ${a.summary ? `<dt>summary</dt><dd>${esc(a.summary)}</dd>` : ""}${a.rationale ? `<dt>rationale</dt><dd>${esc(a.rationale)}</dd>` : ""}
         ${files.length ? `<dt>files</dt><dd>${files.map((f) => `<span class="bd-code">${esc(f)}</span>`).join(" ")}</dd>` : ""}
         ${review ? `<dt>review</dt><dd>${review.conforms ? "conforms" : "does not conform"} · risk ${esc(review.risk)} · ${esc(review.notes)}</dd>` : ""}
@@ -287,25 +303,136 @@
     $("#drawer").innerHTML = `<header style="display:flex;justify-content:space-between;align-items:center;gap:12px"><h2 style="font-size:20px;line-height:26px">${esc(c.title)}</h2><button class="bd-button" data-variant="ghost" data-size="sm" id="drawer-close">Close</button></header>
       <div><span class="bd-badge" data-status="${st}">${label}</span> <span class="caption">${esc(c.id)} · ${c.attempt} attempt${c.attempt === 1 ? "" : "s"} · by ${esc(c.created_by)} · ${ago(c.updated_at)}</span></div>
       <p style="margin:0">${esc(c.body)}</p>
-      <dl class="kv"><dt>scope</dt><dd>${c.scope.map((s) => `<span class="bd-code">${esc(s)}</span>`).join(" ")}</dd><dt>acceptance</dt><dd>${esc(c.accept || "–")}</dd>${c.hint ? `<dt>hint</dt><dd>${esc(c.hint)}</dd>` : ""}${c.landed_sha ? `<dt>landed as</dt><dd><span class="bd-code">${esc(c.landed_sha)}</span></dd>` : ""}</dl>
+      <dl class="kv"><dt>scope</dt><dd>${c.scope.map((s) => `<span class="bd-code">${esc(s)}</span>`).join(" ")}</dd><dt>acceptance</dt><dd>${esc(c.accept || "–")}</dd>${c.hint ? `<dt>hint</dt><dd>${esc(c.hint)}</dd>` : ""}${c.landed_sha ? `<dt>landed as</dt><dd><a data-commit="${esc(c.landed_sha)}" class="bd-code">${esc(c.landed_sha)}</a></dd>` : ""}</dl>
       ${d.claim ? `<div class="row-actions"><button class="bd-button" data-variant="danger" data-size="sm" id="drawer-revoke" data-agent="${esc(d.claim.agent_id)}">Revoke ${esc(d.claim.agent_id)}</button><a class="bd-button" data-variant="secondary" data-size="sm" href="/site/${esc(d.claim.strand)}/" target="_blank">Preview strand</a></div>` : ""}
       <h3 style="font-size:16px">Attempts</h3>${attempts || `<p class="caption">No attempts yet.</p>`}`;
     $("#drawer").dataset.open = "true"; $("#scrim").dataset.open = "true";
     $("#drawer-close").onclick = closeDrawer;
+    setHash(`#change/${id}`);
     const rv = $("#drawer-revoke"); if (rv) rv.onclick = async () => { await api("/api/revoke", { agent: rv.dataset.agent }); openChange(id); };
   }
 
   async function renderLog() {
     const log = await api("/api/log?limit=60");
-    $("#log").innerHTML = log.map((e) => { const t = e.trailers || {}; const merge = t.Merge || ""; const tone = merge === "clean" ? "merged" : merge ? "working" : ""; return `<div class="bd-row" style="cursor:default"><img class="bd-icon" src="/brand/commit.svg" alt=""><div><div class="bd-row-title">${esc(e.title)}</div><div class="bd-row-meta">${t.Agent ? `<span>${esc(t.Agent)}</span>` : ""}${t["Reviewed-By"] ? `<span>reviewed ${esc(t["Reviewed-By"].split(" ").slice(-2).join(" "))}</span>` : ""}${t["Replay-Of"] ? `<span class="bd-badge" data-status="stale" data-dot="false">replay</span>` : ""}${t.Weave ? `<span class="bd-code">${esc(t.Weave)}</span>` : ""}</div></div><span class="bd-code">${short(e.hash)}</span></div>`; }).join("") || `<div class="empty">Trunk is empty.</div>`;
+    $("#log").innerHTML = log.map((e) => { const t = e.trailers || {}; return `<button class="bd-row" data-commit="${esc(e.hash)}"><img class="bd-icon" src="/brand/commit.svg" alt=""><div><div class="bd-row-title">${esc(e.title)}</div><div class="bd-row-meta">${t.Agent ? `<span>${esc(t.Agent)}</span>` : ""}${t.Merge ? `<span class="bd-badge" data-status="${t.Merge === "clean" ? "merged" : "working"}" data-dot="false">${esc(t.Merge)}</span>` : ""}${t["Reviewed-By"] ? `<span>reviewed ${esc(t["Reviewed-By"].split(" ").slice(-2).join(" "))}</span>` : ""}${t["Replay-Of"] ? `<span class="bd-badge" data-status="stale" data-dot="false">replay</span>` : ""}${t.Weave ? `<span class="bd-code">${esc(t.Weave)}</span>` : ""}</div></div><span class="bd-code">${short(e.hash)}</span></button>`; }).join("") || `<div class="empty">Trunk is empty.</div>`;
   }
+
+  // ---- code tab ------------------------------------------------------------------------
+  const ICON_DIR = '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+  const ICON_FILE = '<svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>';
+  let code = { ref: "main", path: "", file: null };
+
+  function setHash(h) { if (location.hash !== h) history.replaceState(null, "", h); }
+  function crumbs() {
+    const parts = code.path.split("/").filter(Boolean);
+    let acc = "";
+    const items = [`<a data-path="">${esc(code.ref.length === 40 ? code.ref.slice(0, 7) : code.ref)}</a>`];
+    for (const p of parts) { acc += (acc ? "/" : "") + p; items.push(`<span>/</span><a data-path="${esc(acc)}">${esc(p)}</a>`); }
+    if (code.file) items.push(`<span>/</span><span class="mono">${esc(code.file.split("/").pop())}</span>`);
+    $("#crumbs").innerHTML = items.join("");
+  }
+  async function renderTree() {
+    $("#ref-input").value = code.ref;
+    crumbs();
+    try {
+      const t = await api(`/api/tree?ref=${encodeURIComponent(code.ref)}&path=${encodeURIComponent(code.path)}`);
+      $("#code-sha").innerHTML = `at <span class="bd-code">${short(t.sha)}</span> ${esc(t.title)}`;
+      const up = code.path ? `<button class="bd-row" data-dir="${esc(code.path.split("/").slice(0, -1).join("/"))}">${ICON_DIR}<div><div class="bd-row-title mono">..</div></div><span></span></button>` : "";
+      $("#tree").innerHTML = up + t.entries.map((e) => `<button class="bd-row" ${e.type === "tree" ? `data-dir="${esc(code.path ? code.path + "/" + e.name : e.name)}"` : `data-file="${esc(code.path ? code.path + "/" + e.name : e.name)}"`} aria-selected="${code.file === (code.path ? code.path + "/" + e.name : e.name)}">${e.type === "tree" ? ICON_DIR : ICON_FILE}<div><div class="bd-row-title mono" style="font-size:13px">${esc(e.name)}</div></div><span class="caption">${e.type === "tree" ? "" : short(e.hash)}</span></button>`).join("") || `<div class="empty">Empty directory.</div>`;
+    } catch (e) {
+      $("#tree").innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+    }
+    setHash(`#code/${code.ref}/${code.file || code.path}`);
+  }
+  function codeLines(text, cls = "") {
+    const lines = text.split("\n");
+    if (lines.length && lines[lines.length - 1] === "") lines.pop();
+    return `<div class="code ${cls}">${lines.map((l, i) => { let k = ""; if (cls === "diff") k = l.startsWith("+++") || l.startsWith("---") ? "hunk" : l.startsWith("+") ? "add" : l.startsWith("-") ? "del" : l.startsWith("@@") ? "hunk" : ""; return `<div class="line ${k}"><span class="ln">${i + 1}</span><span class="lc">${esc(l) || " "}</span></div>`; }).join("")}</div>`;
+  }
+  async function openFile(path) {
+    code.file = path; crumbs();
+    for (const r of $("#tree").querySelectorAll(".bd-row")) r.setAttribute("aria-selected", String(r.dataset.file === path));
+    $("#viewer").innerHTML = `<div class="empty">Loading ${esc(path)}…</div>`;
+    try {
+      const f = await api(`/api/file?ref=${encodeURIComponent(code.ref)}&path=${encodeURIComponent(path)}`);
+      const body = f.text === null ? `<div class="empty">Binary or large file (${f.size} bytes). <a href="${esc(f.raw)}" target="_blank">Open raw</a></div>` : codeLines(f.text);
+      $("#viewer").innerHTML = `<div class="vbar"><span class="path">${esc(path)}</span><span>${f.size.toLocaleString()} bytes</span><span>${esc(f.type || "")}</span><a href="${esc(f.raw)}" target="_blank" style="margin-left:auto">Raw</a><button class="bd-button" data-variant="ghost" data-size="sm" id="btn-why">Why this file?</button></div>${body}<div class="why-list" id="why" hidden></div>`;
+      $("#btn-why").onclick = async () => {
+        const w = await api(`/api/why?path=${encodeURIComponent(path)}`);
+        const el = $("#why"); el.hidden = false;
+        el.innerHTML = `<div class="label">Why ${esc(path)} looks like this</div>` + (w.length ? w.map((x) => `<div class="item"><span class="bd-badge" data-status="${x.outcome === "landed" ? "merged" : "working"}" data-dot="false">${esc(x.outcome)}</span><a data-change="${esc(x.change_id)}"><b>${esc(x.title)}</b></a><span class="caption">by ${esc(x.agent_id)}${x.model ? " · " + esc(String(x.model).split("/").pop()) : ""}</span>${x.trunk_sha ? `<a data-commit="${esc(x.trunk_sha)}" class="bd-code">${short(x.trunk_sha)}</a>` : ""}${x.review ? `<span class="caption">review: ${x.review.conforms ? "conforms" : "does not conform"}, risk ${esc(x.review.risk)}</span>` : ""}</div>`).join("") : `<div class="caption">No landed change touched this file yet; it is from the seed.</div>`);
+      };
+    } catch (e) {
+      $("#viewer").innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+    }
+    setHash(`#code/${code.ref}/${path}`);
+  }
+  function refOptions() {
+    if (!state) return;
+    const refs = ["main", ...(state.claims || []).map((c) => c.strand), ...(state.changes || []).filter((c) => c.landed_sha).slice(0, 10).map((c) => c.landed_sha)];
+    $("#ref-list").innerHTML = [...new Set(refs)].map((r) => `<option value="${esc(r)}">`).join("");
+  }
+  async function openCommit(sha) {
+    selected = null;
+    $("#drawer").innerHTML = `<div class="empty">Loading commit ${short(sha)}…</div>`;
+    $("#drawer").dataset.open = "true"; $("#scrim").dataset.open = "true";
+    try {
+      const c = await api(`/api/commit/${sha}`);
+      const t = c.trailers || {};
+      const body = c.commit.message.split("\n").slice(1).filter((l) => !/^[A-Za-z-]+: /.test(l)).join("\n").trim();
+      $("#drawer").innerHTML = `<header style="display:flex;justify-content:space-between;align-items:center;gap:12px"><h2 style="font-size:20px;line-height:26px">${esc(c.title)}</h2><button class="bd-button" data-variant="ghost" data-size="sm" id="drawer-close">Close</button></header>
+        <div class="caption"><span class="bd-code">${esc(sha)}</span> · ${esc(c.commit.author.name)} · ${new Date(c.commit.committedAt * 1000).toLocaleString()}${c.parent ? ` · parent <a data-commit="${esc(c.parent)}" class="bd-code">${short(c.parent)}</a>` : ""}</div>
+        ${body ? `<p style="margin:0">${esc(body)}</p>` : ""}
+        ${Object.keys(t).length ? `<dl class="kv">${Object.entries(t).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${k === "Change-Id" ? `<a data-change="${esc(v)}">${esc(v)}</a>` : esc(v)}</dd>`).join("")}</dl>` : ""}
+        <div class="row-actions"><a class="bd-button" data-variant="secondary" data-size="sm" data-browse="${esc(sha)}">Browse files at this commit</a><a class="bd-button" data-variant="ghost" data-size="sm" href="/site/${esc(sha)}/" target="_blank">Preview site at this commit</a></div>
+        <h3 style="font-size:16px">${c.files.length} file${c.files.length === 1 ? "" : "s"} changed${c.truncated ? " (first 40 shown)" : ""}</h3>
+        ${c.files.map((f) => `<div class="file-block"><div class="file-head"><span>${esc(f.path)} <span class="caption">${esc(f.kind)}</span></span><span class="counts"><span class="a">+${f.additions}</span> <span class="d">−${f.deletions}</span></span></div>${codeLines(f.diff.split("\n").slice(2).join("\n"), "diff")}</div>`).join("") || `<p class="caption">Root commit: the seed of the site.</p>`}
+        ${c.record && c.record.attempt ? `<h3 style="font-size:16px">Braid record</h3><dl class="kv"><dt>change</dt><dd><a data-change="${esc(c.record.change.id)}">${esc(c.record.change.title)}</a></dd><dt>intent</dt><dd>${esc(c.record.change.body)}</dd><dt>acceptance</dt><dd>${esc(c.record.change.accept || "–")}</dd><dt>attempt</dt><dd>${c.record.attempt.n} by ${esc(c.record.attempt.agent_id)}${c.record.attempt.model ? ` · <span class="bd-code">${esc(String(c.record.attempt.model).split("/").pop())}</span>` : ""} · strand <a href="/site/${esc(c.record.attempt.strand)}/" target="_blank" class="bd-code">${esc(c.record.attempt.strand)}</a></dd>${c.record.attempt.summary ? `<dt>summary</dt><dd>${esc(c.record.attempt.summary)}</dd>` : ""}${c.record.attempt.rationale ? `<dt>rationale</dt><dd>${esc(c.record.attempt.rationale)}</dd>` : ""}${c.record.attempt.review ? `<dt>review</dt><dd>${c.record.attempt.review.conforms ? "conforms" : "does not conform"} · risk ${esc(c.record.attempt.review.risk)} · ${esc(c.record.attempt.review.notes)}</dd>` : ""}</dl>` : ""}
+        ${c.note ? `<h3 style="font-size:16px">git note (refs/notes/braid)</h3><pre>${esc(typeof c.note === "string" ? c.note : JSON.stringify(c.note, null, 2))}</pre>` : ""}`;
+      $("#drawer-close").onclick = closeDrawer;
+      setHash(`#commit/${sha}`);
+    } catch (e) {
+      $("#drawer").innerHTML = `<div class="empty">${esc(e.message)}</div><button class="bd-button" data-variant="ghost" id="drawer-close">Close</button>`;
+      $("#drawer-close").onclick = closeDrawer;
+    }
+  }
+  function showTab(name) {
+    tab = name;
+    for (const x of document.querySelectorAll(".bd-tab")) x.setAttribute("aria-selected", String(x.dataset.tab === name));
+    for (const s of document.querySelectorAll(".tab")) s.hidden = s.id !== `tab-${name}`;
+    if (name === "trunk") renderLog();
+    if (name === "code") { refOptions(); renderTree(); if (code.file) openFile(code.file); }
+  }
+  function route() {
+    const h = location.hash;
+    let m;
+    if ((m = /^#code\/([^/]+)\/?(.*)$/.exec(h))) {
+      code.ref = decodeURIComponent(m[1]);
+      const rest = decodeURIComponent(m[2] || "");
+      if (rest && !rest.endsWith("/") && /\.[A-Za-z0-9]+$/.test(rest)) { code.file = rest; code.path = rest.split("/").slice(0, -1).join("/"); } else { code.file = null; code.path = rest.replace(/\/$/, ""); }
+      showTab("code");
+    } else if ((m = /^#commit\/([0-9a-f]{40})$/.exec(h))) { openCommit(m[1]); }
+    else if ((m = /^#change\/(ch_[0-9a-f]+)$/.exec(h))) { openChange(m[1]); }
+  }
+  document.addEventListener("click", (e) => {
+    const t = e.target.closest("[data-commit],[data-change],[data-browse],[data-dir],[data-file],[data-path]");
+    if (!t) return;
+    if (t.dataset.commit) { e.preventDefault(); openCommit(t.dataset.commit); }
+    else if (t.dataset.change) { e.preventDefault(); openChange(t.dataset.change); }
+    else if (t.dataset.browse) { e.preventDefault(); closeDrawer(); code = { ref: t.dataset.browse, path: "", file: null }; showTab("code"); }
+    else if (t.dataset.dir !== undefined) { code.path = t.dataset.dir; code.file = null; renderTree(); }
+    else if (t.dataset.file) { openFile(t.dataset.file); }
+    else if (t.dataset.path !== undefined) { code.path = t.dataset.path; code.file = null; renderTree(); }
+  });
+  $("#btn-ref").onclick = () => { code = { ref: $("#ref-input").value.trim() || "main", path: "", file: null }; renderTree(); };
+  $("#ref-input").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#btn-ref").click(); });
 
   // ---- wiring ----------------------------------------------------------------------
   $("#changes").addEventListener("click", (e) => { const row = e.target.closest(".bd-row"); if (row) openChange(row.dataset.id); });
   $("#agents").addEventListener("click", async (e) => { const a = e.target.closest(".agent"); if (!a) return; if (!confirm(`Revoke ${a.dataset.agent}? Its token dies now.`)) return; await api("/api/revoke", { agent: a.dataset.agent }); scheduleLoad(); });
   $("#scrim").onclick = closeDrawer;
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
-  for (const b of document.querySelectorAll(".bd-tab")) b.onclick = () => { tab = b.dataset.tab; for (const x of document.querySelectorAll(".bd-tab")) x.setAttribute("aria-selected", String(x === b)); for (const s of document.querySelectorAll(".tab")) s.hidden = s.id !== `tab-${tab}`; if (tab === "trunk") renderLog(); };
+  for (const b of document.querySelectorAll(".bd-tab")) b.onclick = () => { if (b.dataset.tab === "code") setHash(`#code/${code.ref}/${code.file || code.path}`); else setHash("#" + b.dataset.tab); showTab(b.dataset.tab); };
   $("#filter-seg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; filter = b.dataset.filter; for (const x of $("#filter-seg").querySelectorAll("button")) x.setAttribute("aria-pressed", String(x === b)); renderChanges(); });
   $("#mode-seg").addEventListener("click", async (e) => { const b = e.target.closest("button"); if (!b) return; await api("/api/mode", { mode: b.dataset.mode }); load(); });
   $("#review-seg").addEventListener("click", async (e) => { const b = e.target.closest("button"); if (!b) return; await api("/api/review", { enabled: b.dataset.review === "on" }); load(); });
@@ -328,7 +455,8 @@
   $("#mcp-cmd").textContent = `claude mcp add --transport http braid ${location.origin}/mcp`;
   setInterval(() => { if (state) { renderChanges(); renderFeed(); } }, 15000);
 
-  load(); connect();
+  load().then(() => { route(); if (!location.hash || location.hash === "#changes") showTab("changes"); else if (/^#(agents|trunk|activity)$/.test(location.hash)) showTab(location.hash.slice(1)); }); connect();
+  window.addEventListener("hashchange", route);
 })();
 </script>
 </body>

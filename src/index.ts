@@ -7,7 +7,8 @@
 import { createApp, type Middleware } from "blazefw";
 import { cors } from "blazefw/middleware/cors";
 import { handleMcp } from "./mcp";
-import { getRepo, mintToken } from "./artifacts";
+import { getRepo, mintToken, treeDiff, blobText } from "./artifacts";
+import { simpleDiff } from "./merge";
 import { BRANCH } from "./types";
 import { parseTrailers } from "./git";
 import { chat, extractText, REVIEW_MODEL } from "./llm";
@@ -87,6 +88,112 @@ app.get("/api/trunk/token", async (req, res) => {
   if (!st.settings.trunk_name) return res.json({ error: "project not initialised" }, 404);
   const tok = await mintToken(req.env.ARTIFACTS, st.settings.trunk_name, "read", 900);
   res.json({ trunk: st.settings.trunk_name, remote: st.settings.trunk_remote, sha: st.settings.trunk_sha, token: tok.plaintext, expires_at: tok.expiresAt, clone: `git -c http.extraHeader="Authorization: Bearer ${tok.plaintext}" clone "${st.settings.trunk_remote}" trunk` });
+});
+
+/** Resolve a dashboard ref: "main" or a sha on trunk, or a strand repo at its main branch. */
+async function resolveRef(env: Env, ref: string): Promise<{ repoName: string; gitRef: string } | null> {
+  const st = await coord(env).state();
+  if (!st.settings.trunk_name) return null;
+  if (ref.startsWith("strand-")) return { repoName: ref, gitRef: BRANCH };
+  return { repoName: st.settings.trunk_name, gitRef: ref || BRANCH };
+}
+
+const TEXT_EXT = new Set(["html", "css", "js", "json", "md", "txt", "svg", "ts", "mjs", "yml", "yaml", "toml", "xml", "csv"]);
+
+/** Directory listing at a path, for the Code tab. */
+app.get("/api/tree", async (req, res) => {
+  const ref = req.query.get("ref") || BRANCH;
+  const path = (req.query.get("path") ?? "").replace(/^\/+|\/+$/g, "");
+  const r = await resolveRef(req.env, ref);
+  if (!r) return res.json({ error: "project not initialised" }, 404);
+  using repo = await getRepo(req.env.ARTIFACTS, r.repoName, 2);
+  const commit = /^[0-9a-f]{40}$/.test(r.gitRef) ? await repo.readCommit(r.gitRef) : (await repo.log({ ref: r.gitRef, limit: 1 }))[0];
+  if (!commit) return res.json({ error: `no commit at ${ref}` }, 404);
+  let treeHash = commit.treeHash;
+  for (const seg of path.split("/").filter(Boolean)) {
+    const entries = (await repo.readTree(treeHash)) ?? [];
+    const e = entries.find((x) => x.name === seg);
+    if (!e || e.type !== "tree") return res.json({ error: `no directory ${path} at ${ref}` }, 404);
+    treeHash = e.hash;
+  }
+  const entries = ((await repo.readTree(treeHash)) ?? []).map((e) => ({ name: e.name, type: e.type, hash: e.hash, mode: e.mode })).sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === "tree" ? -1 : 1));
+  res.header("Cache-Control", "no-store");
+  res.json({ ref, repo: r.repoName, sha: commit.hash, title: commit.message.split("\n")[0], path, entries });
+});
+
+/** One file's contents, for the viewer. */
+app.get("/api/file", async (req, res) => {
+  const ref = req.query.get("ref") || BRANCH;
+  const path = (req.query.get("path") ?? "").replace(/^\/+/, "");
+  const r = await resolveRef(req.env, ref);
+  if (!r) return res.json({ error: "project not initialised" }, 404);
+  using repo = await getRepo(req.env.ARTIFACTS, r.repoName, 2);
+  const blob = await repo.readFile({ ref: r.gitRef, path });
+  if (!blob) return res.json({ error: `no file ${path} at ${ref}` }, 404);
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  const textual = TEXT_EXT.has(ext) || (blob.type ?? "").startsWith("text/");
+  const text = textual && blob.size <= 512_000 ? await blob.text() : null;
+  res.header("Cache-Control", "no-store");
+  res.json({ ref, repo: r.repoName, path, size: blob.size, type: blob.type, text, raw: `/site/${ref}/${path}` });
+});
+
+/** A commit page: metadata, trailers, per-file diffs against the first parent, and the Braid note. */
+app.get("/api/commit/:sha", async (req, res) => {
+  const sha = req.params.sha;
+  if (!/^[0-9a-f]{40}$/.test(sha)) return res.json({ error: "sha must be 40 hex" }, 400);
+  const repoName = req.query.get("repo") || (await coord(req.env).state()).settings.trunk_name;
+  if (!repoName) return res.json({ error: "project not initialised" }, 404);
+  using repo = await getRepo(req.env.ARTIFACTS, repoName, 2);
+  const commit = await repo.readCommit(sha);
+  if (!commit) return res.json({ error: "no such commit" }, 404);
+  const parent = commit.parents[0] ?? null;
+  const changes = parent ? await treeDiff(repo, parent, sha) : [];
+  const files = await Promise.all(
+    changes.slice(0, 40).map(async (c) => {
+      const [base, head] = await Promise.all([blobText(repo, c.baseHash), blobText(repo, c.headHash)]);
+      const diff = simpleDiff(c.path, base, head, 12_000);
+      let additions = 0, deletions = 0;
+      for (const line of diff.split("\n")) {
+        if (line.startsWith("+") && !line.startsWith("+++")) additions++;
+        else if (line.startsWith("-") && !line.startsWith("---")) deletions++;
+      }
+      return { path: c.path, kind: c.kind, additions, deletions, diff };
+    }),
+  );
+  // git notes live on refs/notes/braid as a tree keyed by the annotated commit's sha (optionally fanned out ab/cdef…).
+  let note: unknown = null;
+  try {
+    let head: ArtifactsCommitMetadata | undefined;
+    for (const spelling of ["refs/notes/braid", "notes/braid"]) {
+      head = (await repo.log({ ref: spelling, limit: 1 }).catch(() => []))[0];
+      if (head) break;
+    }
+    if (head) {
+      const root = (await repo.readTree(head.treeHash)) ?? [];
+      let blobHash: string | null = root.find((e) => e.name === sha)?.hash ?? null;
+      if (!blobHash) {
+        const fan = root.find((e) => e.name === sha.slice(0, 2) && e.type === "tree");
+        if (fan) blobHash = ((await repo.readTree(fan.hash)) ?? []).find((e) => e.name === sha.slice(2))?.hash ?? null;
+      }
+      const t = await blobText(repo, blobHash);
+      if (t !== null) {
+        try { note = JSON.parse(t); } catch { note = t; }
+      }
+    }
+  } catch {
+    /* no notes ref yet */
+  }
+  // Braid's own record of the attempt, from the Coordinator (always available, even when notes cannot be read).
+  const trailers = parseTrailers(commit.message);
+  let record: unknown = null;
+  if (trailers["Change-Id"]) {
+    const detail = await coord(req.env).changeDetail({ id: trailers["Change-Id"] });
+    const n = Number(trailers.Attempt ?? 0);
+    const attempt = detail?.attempts.find((a) => Number(a.n) === n) ?? null;
+    if (detail) record = { change: detail.change, attempt: attempt ? { ...attempt, review: attempt.review ? JSON.parse(String(attempt.review)) : null, files: attempt.files ? JSON.parse(String(attempt.files)) : [] } : null };
+  }
+  res.header("Cache-Control", "no-store");
+  res.json({ repo: repoName, commit, title: commit.message.split("\n")[0], trailers, parent, files, truncated: changes.length > 40, note, record });
 });
 
 /** Trunk history straight from Artifacts, with provenance trailers parsed. */

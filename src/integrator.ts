@@ -9,7 +9,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { AgentKind, Change, LandingResult } from "./types";
 import { BRANCH } from "./types";
-import { clone, commitFiles, push, addNote, headSha, type Workspace } from "./git";
+import { clone, commitFiles, push, addNote, headSha, fetchRef, type Workspace } from "./git";
 import { getRepo, treeDiff, blobText, inScope } from "./artifacts";
 import { threeWay, simpleDiff } from "./merge";
 import { chat, extractJson, reviewMessages, REVIEW_MODEL, type ReviewResult } from "./llm";
@@ -113,7 +113,9 @@ export class Integrator extends DurableObject<Env> {
   private async workspace(): Promise<Workspace> {
     if (this.ws) return this.ws;
     const token = await this.trunkToken();
-    this.ws = await clone({ remote: this.get("remote")!, token, branch: BRANCH, depth: 1 });
+    const remote = this.get("remote")!;
+    this.ws = await clone({ remote, token, branch: BRANCH, depth: 1 });
+    await fetchRef(this.ws, { remote, token, ref: "refs/notes/braid" }); // so new notes build on the existing ones
     return this.ws;
   }
 
