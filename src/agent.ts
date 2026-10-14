@@ -21,6 +21,7 @@ interface RunnerState {
   idlePolls: number;
   errors: number;
   lease: number;
+  lastError?: string;
 }
 
 const CONTEXT_FILES = ["site.json", "README.md"];
@@ -70,6 +71,7 @@ export class AgentRunner extends DurableObject<Env> {
       st.errors = 0;
     } catch (e) {
       st.errors++;
+      st.lastError = `${new Date().toISOString()} ${String((e as Error).message).slice(0, 300)}`;
       console.error(`agent ${st.agent} step failed`, e);
       again = st.errors < 5;
       if (!again) {
@@ -78,7 +80,7 @@ export class AgentRunner extends DurableObject<Env> {
       }
     }
     await this.ctx.storage.put("state", st);
-    if (again && st.running) await this.ctx.storage.setAlarm(Date.now() + 400 + Math.random() * 1500);
+    if (again && st.running) await this.ctx.storage.setAlarm(Date.now() + (st.errors ? 1500 * st.errors : 400) + Math.random() * 1500);
   }
 
   /** One iteration. Returns true when the loop should continue. */

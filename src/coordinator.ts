@@ -241,6 +241,26 @@ export class Coordinator extends DurableObject<Env> {
     return rows.map(rowToChange);
   }
 
+  async listAttempts(opts: { outcome?: string; agent?: string; limit?: number } = {}) {
+    const limit = Math.min(500, opts.limit ?? 100);
+    const where: string[] = [];
+    const args: SqlStorageValue[] = [];
+    if (opts.outcome) { where.push("a.outcome = ?"); args.push(opts.outcome); }
+    if (opts.agent) { where.push("a.agent_id = ?"); args.push(opts.agent); }
+    const rows = this.sql.exec(`SELECT a.*, c.title FROM attempts a JOIN changes c ON c.id = a.change_id ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY a.created_at DESC LIMIT ?`, ...args, limit).toArray();
+    const counts: Record<string, number> = {};
+    for (const r of this.sql.exec("SELECT COALESCE(outcome, 'pending') AS o, COUNT(*) AS n FROM attempts GROUP BY o").toArray()) counts[String(r.o)] = Number(r.n);
+    return { counts, attempts: rows };
+  }
+
+  async listEvents(opts: { kind?: string; limit?: number } = {}) {
+    const limit = Math.min(600, opts.limit ?? 200);
+    const rows = opts.kind
+      ? this.sql.exec("SELECT * FROM events WHERE kind = ? ORDER BY seq DESC LIMIT ?", opts.kind, limit).toArray()
+      : this.sql.exec("SELECT * FROM events ORDER BY seq DESC LIMIT ?", limit).toArray();
+    return rows.map((e) => ({ seq: Number(e.seq), ts: Number(e.ts), kind: String(e.kind), data: JSON.parse(String(e.data)) }));
+  }
+
   async why(opts: { path: string }) {
     const needle = `%${JSON.stringify(opts.path)}%`;
     const rows = this.sql
@@ -314,10 +334,22 @@ export class Coordinator extends DurableObject<Env> {
     try {
       const ns = this.env.ARTIFACTS;
       using trunk = await getRepo(ns, trunkName);
-      const forked = await trunk.fork(strand, { defaultBranchOnly: true, description: `${pick.title} · attempt ${n} · ${input.agent}` });
+      let forked: { name: string; remote: string; token: string | null } | null = null;
+      for (let i = 0; !forked; i++) {
+        try {
+          forked = await trunk.fork(strand, { defaultBranchOnly: true, description: `${pick.title} · attempt ${n} · ${input.agent}` });
+        } catch (e) {
+          const code = (e as { code?: string }).code ?? "";
+          if (code === "ALREADY_EXISTS" || /ALREADY_EXISTS/.test(String((e as Error).message))) {
+            using s = await getRepo(ns, strand);
+            forked = { name: strand, remote: (await s.info()).remote, token: null };
+          } else if (i >= 2) throw e;
+          else await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+        }
+      }
       using srepo = await getRepo(ns, forked.name);
       const [tok, head] = await Promise.all([srepo.createToken("write", lease), srepo.log({ ref: BRANCH, limit: 1 })]);
-      await srepo.revokeToken(forked.token); // the fork's day-long token must not outlive the lease
+      if (forked.token) await srepo.revokeToken(forked.token); // the fork's day-long token must not outlive the lease
       const baseSha = head[0]?.hash ?? this.get("trunk_sha") ?? "";
       const leaseExpires = now + lease * 1000;
       this.sql.exec(

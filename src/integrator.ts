@@ -136,7 +136,7 @@ export class Integrator extends DurableObject<Env> {
     const diff = files.map((f) => simpleDiff(f.path, f.base, f.head, 2500)).join("\n\n");
     const change: Change = { id: item.change_id, title: item.title, body: item.body, scope: item.scope, accept: item.accept, status: "queued", attempt: item.n, hint: null, created_by: "", created_at: 0, updated_at: 0, landed_sha: null, priority: 0 };
     try {
-      const text = await chat(this.env, REVIEW_MODEL, reviewMessages(change, diff), { json: true, max_tokens: 600, temperature: 0.1 });
+      const text = await chat(this.env, REVIEW_MODEL, reviewMessages(change, diff), { json: true, max_tokens: 1500, temperature: 0.1 });
       const r = extractJson<ReviewResult>(text);
       if (!r || typeof r.conforms !== "boolean") return null;
       return { conforms: r.conforms, risk: (["low", "medium", "high"] as const).includes(r.risk) ? r.risk : "medium", notes: String(r.notes ?? "").slice(0, 400) };
@@ -154,6 +154,7 @@ export class Integrator extends DurableObject<Env> {
     lines.push(`Scope: ${item.scope.join(", ")}`);
     lines.push(`Merge: ${mergeKind}`);
     if (review) lines.push(`Reviewed-By: braid-reviewer (${REVIEW_MODEL}) conforms=${review.conforms} risk=${review.risk}`);
+    else if (item.review) lines.push(`Reviewed-By: braid-reviewer unavailable (landed on scope check alone)`);
     if (item.replay_of) lines.push(`Replay-Of: ${item.replay_of}`);
     lines.push(`Weave: ${weave}`);
     return lines.join("\n") + "\n";

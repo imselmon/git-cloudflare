@@ -2,7 +2,8 @@
 import type { Change } from "./types";
 
 export const EDIT_MODEL = "@cf/zai-org/glm-5.3-flash";
-export const REVIEW_MODEL = "@cf/zai-org/glm-5.3-flash";
+export const REVIEW_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct"; // fast, reliable JSON: reviews must not slow the weave
+export const FAST_MODEL = REVIEW_MODEL;
 
 type Msg = { role: "system" | "user" | "assistant"; content: string };
 

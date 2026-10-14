@@ -10,6 +10,7 @@ import { handleMcp } from "./mcp";
 import { getRepo, mintToken } from "./artifacts";
 import { BRANCH } from "./types";
 import { parseTrailers } from "./git";
+import { chat, extractText, REVIEW_MODEL } from "./llm";
 
 export { Coordinator } from "./coordinator";
 export { Integrator } from "./integrator";
@@ -76,6 +77,8 @@ app.post("/api/swarm", async (req, res) => {
   res.json(await coord(req.env).swarm({ n: Number(b.n ?? 1), kind: b.kind === "synthetic" ? "synthetic" : "llm", model: b.model, maxChanges: b.maxChanges }));
 });
 app.post("/api/stop", async (req, res) => res.json(await coord(req.env).stopAll()));
+app.get("/api/attempts", async (req, res) => res.json(await coord(req.env).listAttempts({ outcome: req.query.get("outcome") ?? undefined, agent: req.query.get("agent") ?? undefined, limit: Number(req.query.get("limit") ?? 100) })));
+app.get("/api/events", async (req, res) => res.json(await coord(req.env).listEvents({ kind: req.query.get("kind") ?? undefined, limit: Number(req.query.get("limit") ?? 200) })));
 app.get("/api/why", async (req, res) => res.json(await coord(req.env).why({ path: req.query.get("path") ?? "" })));
 app.get("/api/integrator", async (req, res) => res.json(await req.env.INTEGRATOR.get(req.env.INTEGRATOR.idFromName("main")).status()));
 app.get("/api/trunk/token", async (req, res) => {
@@ -92,6 +95,26 @@ app.get("/api/log", async (req, res) => {
   using repo = await getRepo(req.env.ARTIFACTS, st.settings.trunk_name, 2);
   const entries = await repo.log({ ref: req.query.get("ref") ?? BRANCH, limit: Math.min(200, Number(req.query.get("limit") ?? 40)) });
   res.json(entries.map((e) => ({ hash: e.hash, message: e.message, author: e.author, committedAt: e.committedAt, parents: e.parents, trailers: parseTrailers(e.message), title: e.message.split("\n")[0] })));
+});
+
+app.get("/api/agents/:id", async (req, res) => res.json(await req.env.AGENT.get(req.env.AGENT.idFromName(req.params.id)).status()));
+
+/** Debug: see what a Workers AI model returns for a tiny review prompt. */
+app.get("/api/debug/ai", async (req, res) => {
+  const model = req.query.get("model") ?? REVIEW_MODEL;
+  const messages = [
+    { role: "system" as const, content: 'Reply with ONLY JSON: {"conforms": true|false, "risk": "low"|"medium"|"high", "notes": "<one sentence>"}.' },
+    { role: "user" as const, content: "Change: add a FAQ section. Diff: +++ sections/faq.html\n+<h2>FAQ</h2>\n+<p>When? October.</p>" },
+  ];
+  const t0 = Date.now();
+  const input: Record<string, unknown> = { messages, max_tokens: Number(req.query.get("max_tokens") ?? 800), temperature: 0.1 };
+  if (req.query.get("json") !== "0") input.response_format = { type: "json_object" };
+  try {
+    const raw = await (req.env.AI as unknown as { run: (m: string, i: unknown) => Promise<unknown> }).run(model, input);
+    res.json({ model, ms: Date.now() - t0, text: extractText(raw), raw });
+  } catch (e) {
+    res.json({ model, ms: Date.now() - t0, error: String((e as Error).message) });
+  }
 });
 
 /** Debug: list a tree by hash to verify clone-free reads. */

@@ -139,7 +139,7 @@
     if (c.status === "queued") return ["working", "Weaving"];
     if (c.status === "failed") return ["conflict", "Failed"];
     if (c.status === "rejected") return ["conflict", "Rejected"];
-    if (c.attempt > 0 && c.hint) return ["stale", "Replay"];
+    if (c.attempt > 0 && c.hint) return ["stale", /conflicted/.test(c.hint) ? "Replay" : "Retry"];
     return ["", "Open"];
   }
 
