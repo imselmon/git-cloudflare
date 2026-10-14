@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><style>
+.diagram { display: grid; grid-template-columns: 420px 1fr 520px; gap: 40px; align-items: stretch; margin-top: 10px; }
+.box { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; padding: 26px 30px; }
+.box h4 { margin: 0 0 8px; font-size: 30px; }
+.box p { margin: 0; font-size: 22px; line-height: 1.35; color: var(--muted); }
+.col { display: flex; flex-direction: column; gap: 22px; }
+.art { border-color: var(--brand); background: #1b1410; }
+.art h4 { color: var(--brand); }
+.arrow { font-size: 22px; color: var(--muted); font-family: var(--mono); }
+</style></head><body><div class="stage">
+<div class="eyebrow fade d1">Architecture</div>
+<div class="diagram">
+  <div class="col">
+    <div class="box fade d2"><h4>Dashboard</h4><p>WebSocket event stream, live site preview, Code and Commits tabs</p></div>
+    <div class="box fade d2"><h4>Claude Code · any agent</h4><p>MCP in one line, then plain git</p></div>
+    <div class="box fade d2"><h4>Workers AI</h4><p>GLM-5.3-Flash edits · Llama 4 Scout reviews</p></div>
+  </div>
+  <div class="col">
+    <div class="box fade d3"><h4>Worker · Blaze router</h4><p>/api · /ws · /mcp · /site/&lt;ref&gt;/… served straight from Artifacts</p></div>
+    <div class="box fade d4"><h4>Coordinator DO</h4><p>Backlog, linearizable scope claims, fork per attempt, token = lease, alarms expire leases</p></div>
+    <div class="box fade d5"><h4>AgentRunner DO × N</h4><p>claim → clone strand → edit → push → submit</p></div>
+    <div class="box fade d6"><h4>Integrator DO · sole trunk writer</h4><p>Merkle diff via readTree · scope check · review · 3-way + JSON union merge · trailers + notes · one push per weave · replay on conflict</p></div>
+  </div>
+  <div class="col">
+    <div class="box art fade d7"><h4>Artifacts</h4><p>trunk + strand-&lt;change&gt;-&lt;n&gt; × N<br>create · fork · createToken · revokeToken<br>readCommit · readTree · readBlob · readFile · log<br>git smart-HTTP for every push</p></div>
+    <div class="box fade d8"><h4>Scale path</h4><p>Coordinator per scope prefix · namespace per shard · tree of integrators feeding trunk</p></div>
+  </div>
+</div>
+</div></body></html>

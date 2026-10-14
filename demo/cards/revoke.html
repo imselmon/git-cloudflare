@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"></head><body><div class="stage">
+<div class="eyebrow">The lease is the token</div>
+<div class="term" id="t"></div>
+<script>
+const lines = [
+  ["p","$ "],["k","git -c http.extraHeader=\"Authorization: Bearer $TOKEN\" push origin HEAD:main"],["nl"],
+  ["err","remote: Invalid or expired token"],["nl"],
+  ["err","fatal: unable to access 'https://….artifacts.cloudflare.net/git/braid/strand-9f95641e-1.git/': The requested URL returned error: 403"],["nl"],["nl"],
+  ["c","# The Coordinator revoked this agent's token. Artifacts refuses the push."],["nl"],
+  ["c","# The change is back in the pool for someone else."],["nl"],
+];
+const t = document.getElementById("t"); let i = 0, j = 0; let span = null;
+function step() {
+  if (i >= lines.length) { t.classList.add("cursor"); return; }
+  const [cls, text] = lines[i];
+  if (cls === "nl") { t.appendChild(document.createTextNode("\n")); i++; return setTimeout(step, 150); }
+  if (!span) { span = document.createElement("span"); span.className = cls; t.appendChild(span); }
+  span.textContent = text.slice(0, ++j);
+  if (j >= text.length) { i++; j = 0; span = null; return setTimeout(step, cls === "k" ? 700 : 250); }
+  setTimeout(step, cls === "k" ? 20 : 5);
+}
+setTimeout(step, 500);
+</script>
+</div></body></html>

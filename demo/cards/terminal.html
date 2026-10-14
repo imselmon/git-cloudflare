@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"></head><body><div class="stage">
+<div class="eyebrow">Any agent, plain git</div>
+<div class="term" id="t"></div>
+<script>
+const lines = [
+  ["p","$ "],["k","claude mcp add --transport http braid https://braid.monarc.workers.dev/mcp"],["nl"],
+  ["c","Added HTTP MCP server braid"],["nl"],["nl"],
+  ["p","> "],["k","claim a change from braid and do it"],["nl"],["nl"],
+  ["c","⏺ braid - claim_change (agent: claude-code)"],["nl"],
+  ["c","  change:  Add a speakers section   scope: sections/speakers.html, site.json"],["nl"],
+  ["c","  strand:  strand-c6d92322-2        lease: 600 s"],["nl"],["nl"],
+  ["p","$ "],["k","git -c http.extraHeader=\"Authorization: Bearer $TOKEN\" clone $REMOTE strand"],["nl"],
+  ["p","$ "],["k","vim sections/speakers.html site.json"],["nl"],
+  ["p","$ "],["k","git commit -am \"Add a speakers section\" && git push origin HEAD:main"],["nl"],["nl"],
+  ["c","⏺ braid - submit_change (head: 17f6321)"],["nl"],
+  ["ok","  queued → scope ok → review: conforms, risk low → woven into trunk as d3a5b61"],["nl"],
+];
+const t = document.getElementById("t"); let i = 0, j = 0; let span = null;
+function step() {
+  if (i >= lines.length) { t.classList.add("cursor"); return; }
+  const [cls, text] = lines[i];
+  if (cls === "nl") { t.appendChild(document.createTextNode("\n")); i++; return setTimeout(step, 120); }
+  if (!span) { span = document.createElement("span"); span.className = cls; t.appendChild(span); }
+  span.textContent = text.slice(0, ++j);
+  if (j >= text.length) { i++; j = 0; span = null; return setTimeout(step, cls === "k" ? 500 : 200); }
+  setTimeout(step, cls === "k" ? 22 : 6);
+}
+setTimeout(step, 600);
+</script>
+</div></body></html>
