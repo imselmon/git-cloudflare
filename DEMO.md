@@ -52,6 +52,7 @@ import json, subprocess
 for k, t in json.load(open("narration.json")).items():
     subprocess.run(["say", "-v", "Samantha", "-r", "178", "-o", f"out/audio/{k}.aiff", t], check=True)
 PY
-node record.mjs        # resets the live project and records every scene (about 10 minutes)
+node record.mjs        # resets the live project and records every scene (about 10 minutes);
+                       # demo/director.js is injected for the callouts, highlight rings, zooms and scene titles
 node build.mjs         # writes out/braid-demo.mp4 and out/braid-demo.srt
 ```
