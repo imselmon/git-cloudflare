@@ -6,7 +6,9 @@ import { mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 
 const ROOT = new URL("./", import.meta.url).pathname;
 const OUT = `${ROOT}out/`;
-mkdirSync(`${OUT}seg`, { recursive: true });
+const AUDIO_PATH = `${ROOT}${(process.env.AUDIO_DIR ?? "out/audio").replace(/\/$/, "")}/`;
+const NAME = process.env.OUT_NAME ?? "braid-demo";
+mkdirSync(`${OUT}seg-${NAME}`, { recursive: true });
 mkdirSync(`${OUT}cap`, { recursive: true });
 const narration = JSON.parse(readFileSync(`${ROOT}narration.json`, "utf8"));
 const ff = (args) => execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", ...args], { stdio: ["ignore", "inherit", "inherit"] });
@@ -50,7 +52,7 @@ for (const [name, src, speed, minS, maxS] of SCENES) {
   const raw = `${OUT}raw/${src}.webm`;
   if (!existsSync(raw)) { console.warn(`missing ${raw}, skipping`); continue; }
   const audioKey = name in AUDIO ? AUDIO[name] : name;
-  const aiff = audioKey ? (existsSync(`${OUT}audio/${audioKey}.wav`) ? `${OUT}audio/${audioKey}.wav` : `${OUT}audio/${audioKey}.aiff`) : null;
+  const aiff = audioKey ? (existsSync(`${AUDIO_PATH}${audioKey}.wav`) ? `${AUDIO_PATH}${audioKey}.wav` : `${OUT}audio/${audioKey}.aiff`) : null;
   const nDur = aiff ? dur(aiff) : 0;
   let footage = dur(raw) / speed;
   let L = Math.max(nDur + 1.2, minS || 0, Math.min(footage, maxS || footage));
@@ -78,16 +80,16 @@ for (const [name, src, speed, minS, maxS] of SCENES) {
   overlays.forEach((o, i) => { chain += `;[${last}][${i + 1}:v]overlay=0:H-h:enable='between(t,${o.a.toFixed(2)},${o.b.toFixed(2)})'[v${i + 1}]`; last = `v${i + 1}`; });
   const aIdx = overlays.length + 1;
   chain += aiff ? `;[${aIdx}:a]aresample=48000,apad,atrim=0:${L.toFixed(2)},afade=t=out:st=${Math.max(0, L - 0.4).toFixed(2)}:d=0.4[a]` : `;anullsrc=r=48000:cl=stereo,atrim=0:${L.toFixed(2)}[a]`;
-  const seg = `${OUT}seg/${name}.mp4`;
+  const seg = `${OUT}seg-${NAME}/${name}.mp4`;
   ff([...inputs, "-filter_complex", chain, "-map", `[${last}]`, "-map", "[a]", "-t", L.toFixed(2), "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-r", "30", "-c:a", "aac", "-b:a", "160k", "-ac", "2", "-ar", "48000", "-movflags", "+faststart", seg]);
   console.log(`${name}: ${L.toFixed(1)}s (footage ${footage.toFixed(1)}s, voice ${nDur.toFixed(1)}s, ${caps.length} captions)`);
   list.push(`file '${seg}'`);
   clock += L;
 }
 await browser.close();
-writeFileSync(`${OUT}list.txt`, list.join("\n") + "\n");
-writeFileSync(`${OUT}braid-demo.srt`, srt.join("\n"));
-ff(["-f", "concat", "-safe", "0", "-i", `${OUT}list.txt`, "-c", "copy", `${OUT}braid-demo.mp4`]);
-console.log(`\nbraid-demo.mp4: ${(clock / 60).toFixed(1)} min`);
+writeFileSync(`${OUT}list-${NAME}.txt`, list.join("\n") + "\n");
+writeFileSync(`${OUT}${NAME}.srt`, srt.join("\n"));
+ff(["-f", "concat", "-safe", "0", "-i", `${OUT}list-${NAME}.txt`, "-c", "copy", `${OUT}${NAME}.mp4`]);
+console.log(`\n${NAME}.mp4: ${(clock / 60).toFixed(1)} min`);
 
 function ts(s) { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60; return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${sec.toFixed(3).padStart(6, "0").replace(".", ",")}`; }

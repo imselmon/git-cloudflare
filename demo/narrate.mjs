@@ -3,6 +3,7 @@
 // Usage: node narrate.mjs            synthesise all segments
 //        node narrate.mjs --voices   list English voices (name, id, description)
 //        CARTESIA_VOICE_ID=<id> node narrate.mjs   use a specific voice
+//        AUDIO_DIR=out/audio-<name> ...            write to another folder (keep several voices)
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 
 const ROOT = new URL("./", import.meta.url).pathname;
@@ -51,7 +52,8 @@ if (!voiceId) {
 }
 
 const narration = JSON.parse(readFileSync(`${ROOT}narration.json`, "utf8"));
-mkdirSync(`${ROOT}out/audio`, { recursive: true });
+const AUDIO = `${ROOT}${(process.env.AUDIO_DIR ?? "out/audio").replace(/\/$/, "")}/`;
+mkdirSync(AUDIO, { recursive: true });
 const models = (process.env.CARTESIA_MODEL ?? "sonic-3,sonic-2").split(",");
 for (const [key, transcript] of Object.entries(narration)) {
   let ok = false, lastErr = "";
@@ -63,11 +65,11 @@ for (const [key, transcript] of Object.entries(narration)) {
     });
     if (!r.ok) { lastErr = `${r.status} ${await r.text()}`; continue; }
     const buf = Buffer.from(await r.arrayBuffer());
-    writeFileSync(`${ROOT}out/audio/${key}.wav`, buf);
+    writeFileSync(`${AUDIO}${key}.wav`, buf);
     console.log(`${key}: ${(buf.length / 1024).toFixed(0)} KB (${model_id})`);
     ok = true;
     break;
   }
   if (!ok) throw new Error(`${key}: ${lastErr}`);
 }
-console.log("done: out/audio/*.wav (build.mjs prefers .wav over .aiff)");
+console.log(`done: ${AUDIO}*.wav (build.mjs prefers .wav over .aiff; set AUDIO_DIR to match)`);
