@@ -3,7 +3,7 @@
   "segments": [
     {
       "key": "r1_hook",
-      "seconds": 6,
+      "seconds": 7,
       "kind": "card",
       "card": "reel-hook.html",
       "title": "GitHub… par agents ke liye?",
@@ -11,7 +11,7 @@
     },
     {
       "key": "r2_intent",
-      "seconds": 10,
+      "seconds": 11,
       "kind": "footage",
       "src": "s03_spawn",
       "from": 18,
@@ -56,7 +56,7 @@
     },
     {
       "key": "r5_close",
-      "seconds": 9,
+      "seconds": 10,
       "kind": "card",
       "card": "reel-close.html",
       "title": "Braid · Workers + Artifacts",
