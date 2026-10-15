@@ -40,3 +40,18 @@ cd trunk && git log --format='%h %s%n%(trailers)' -3 && git fetch origin 'refs/n
 - A change stuck in Working: its lease expires within five minutes and it returns to Open. Or click the agent and revoke it.
 - Nothing claimable: the backlog is finished. Press **Propose a change** or **Reset project**.
 - Model slow: the agents time out after 75 s and fall back to a faster model on the third try.
+
+## Regenerating the demo video
+
+The video in the submission was produced by `demo/`: Playwright records the live dashboard and the HTML cards in `demo/cards/`, macOS `say` reads `demo/narration.json`, and ffmpeg assembles 1080p30 H.264 with burned-in captions and an `.srt` sidecar.
+
+```bash
+cd demo && npm install && npx playwright install chromium
+python3 - <<'PY'
+import json, subprocess
+for k, t in json.load(open("narration.json")).items():
+    subprocess.run(["say", "-v", "Samantha", "-r", "178", "-o", f"out/audio/{k}.aiff", t], check=True)
+PY
+node record.mjs        # resets the live project and records every scene (about 10 minutes)
+node build.mjs         # writes out/braid-demo.mp4 and out/braid-demo.srt
+```
