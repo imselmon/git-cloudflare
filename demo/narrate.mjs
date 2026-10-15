@@ -4,6 +4,7 @@
 //        node narrate.mjs --voices   list English voices (name, id, description)
 //        CARTESIA_VOICE_ID=<id> node narrate.mjs   use a specific voice
 //        AUDIO_DIR=out/audio-<name> ...            write to another folder (keep several voices)
+//        NARRATION=reel.json CARTESIA_LANGUAGE=hi ...   another script file, another language
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 
 const ROOT = new URL("./", import.meta.url).pathname;
@@ -51,7 +52,11 @@ if (!voiceId) {
   console.log(`voice: ${pick.name} (${pick.id})`);
 }
 
-const narration = JSON.parse(readFileSync(`${ROOT}narration.json`, "utf8"));
+const narrationFile = process.env.NARRATION ?? "narration.json";
+const raw = JSON.parse(readFileSync(`${ROOT}${narrationFile}`, "utf8"));
+// narration.json is {key: text}; reel.json is {segments: [{key, text}]}
+const narration = Array.isArray(raw.segments) ? Object.fromEntries(raw.segments.map((x) => [x.key, x.text])) : raw;
+const language = process.env.CARTESIA_LANGUAGE ?? "en";
 const AUDIO = `${ROOT}${(process.env.AUDIO_DIR ?? "out/audio").replace(/\/$/, "")}/`;
 mkdirSync(AUDIO, { recursive: true });
 const models = (process.env.CARTESIA_MODEL ?? "sonic-3,sonic-2").split(",");
@@ -61,7 +66,7 @@ for (const [key, transcript] of Object.entries(narration)) {
     const r = await fetch(`${API}/tts/bytes`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ model_id, transcript, voice: { mode: "id", id: voiceId }, output_format: { container: "wav", encoding: "pcm_s16le", sample_rate: 44100 }, language: "en" }),
+      body: JSON.stringify({ model_id, transcript, voice: { mode: "id", id: voiceId }, output_format: { container: "wav", encoding: "pcm_s16le", sample_rate: 44100 }, language }),
     });
     if (!r.ok) { lastErr = `${r.status} ${await r.text()}`; continue; }
     const buf = Buffer.from(await r.arrayBuffer());

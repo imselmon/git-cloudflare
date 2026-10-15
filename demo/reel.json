@@ -1,0 +1,66 @@
+{
+  "voice_note": "Hinglish, Roman script. Run: NARRATION=reel.json AUDIO_DIR=out/audio-reel CARTESIA_LANGUAGE=hi CARTESIA_VOICE_ID=638efaaa-4d0c-442e-b701-3fae16aad012 node demo/narrate.mjs",
+  "segments": [
+    {
+      "key": "r1_hook",
+      "seconds": 6,
+      "kind": "card",
+      "card": "reel-hook.html",
+      "title": "GitHub… par agents ke liye?",
+      "text": "Git sochta hai ki developer se dobara poochna mehenga hai. Agents ke liye? Bilkul sasta."
+    },
+    {
+      "key": "r2_intent",
+      "seconds": 10,
+      "kind": "footage",
+      "src": "s03_spawn",
+      "from": 18,
+      "crop": {
+        "x": 250,
+        "y": 0,
+        "w": 1230,
+        "h": 1080
+      },
+      "title": "Change = intent.\nHar attempt = apna repo.",
+      "text": "Isliye maine banaya Braid. Yahan ek change ek intent hai, pull request nahi. Har attempt ko milta hai apna Artifacts repo, aur apna token, jo lease ke saath expire hota hai."
+    },
+    {
+      "key": "r3_replay",
+      "seconds": 10,
+      "kind": "footage",
+      "src": "s04_conflict",
+      "from": 27,
+      "crop": {
+        "x": 250,
+        "y": 0,
+        "w": 1230,
+        "h": 1080
+      },
+      "title": "Conflict? Merge nahi.\nReplay.",
+      "text": "Conflict aaya? Hum merge nahi karte. Change wapas jaata hai agent ke paas, aur naye trunk par replay hota hai. Merge markers kabhi nahi."
+    },
+    {
+      "key": "r4_swarm",
+      "seconds": 10,
+      "kind": "footage",
+      "src": "s07_swarm",
+      "from": 30,
+      "crop": {
+        "x": 0,
+        "y": 0,
+        "w": 1230,
+        "h": 1080
+      },
+      "title": "1,000 agents. 1 file.\n1 minute.",
+      "text": "Ek hazaar agents, ek hi file, ek minute ke andar sab land. Trunk par sirf ek push, per weave."
+    },
+    {
+      "key": "r5_close",
+      "seconds": 9,
+      "kind": "card",
+      "card": "reel-close.html",
+      "title": "Braid · Workers + Artifacts",
+      "text": "Cloudflare Workers aur Artifacts par bana hai. Link bio mein. Braid: agents ship intents, not pull requests."
+    }
+  ]
+}
