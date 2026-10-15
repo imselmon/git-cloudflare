@@ -126,7 +126,7 @@
         <button class="bd-button" data-variant="ghost" data-size="sm" id="btn-reload" style="margin-left:auto">Reload</button>
         <a class="bd-button" data-variant="ghost" data-size="sm" href="/site/main/" target="_blank">Open</a>
       </div>
-      <iframe id="preview" src="/site/main/" title="Live site served from Artifacts"></iframe>
+      <div class="frames"><iframe id="preview" src="/site/main/" title="Live site served from Artifacts"></iframe><iframe id="preview-next" src="about:blank" title="" aria-hidden="true"></iframe></div>
     </div>
     <section>
       <h2 class="label" style="margin-bottom:8px">Activity</h2>
@@ -247,7 +247,17 @@
     try { state = await api("/api/state"); render(); } catch (e) { $("#subtitle").textContent = `Cannot load state: ${e.message}`; }
   }
   function scheduleLoad() { if (loadTimer) return; loadTimer = setTimeout(() => { loadTimer = null; load(); }, 700); }
-  function reloadPreview() { if (previewTimer) return; previewTimer = setTimeout(() => { previewTimer = null; const f = $("#preview"); f.src = `/site/main/?t=${Date.now()}`; $("#preview-ref").textContent = short(state && state.settings.trunk_sha); }, 900); }
+  // Double-buffered preview: load the new trunk in a hidden iframe, then swap, so the site never flashes blank.
+  function reloadPreview() {
+    if (previewTimer) return;
+    previewTimer = setTimeout(() => {
+      previewTimer = null;
+      const next = $("#preview-next"), cur = $("#preview");
+      const onload = () => { next.removeEventListener("load", onload); next.id = "preview"; next.removeAttribute("aria-hidden"); next.title = "Live site served from Artifacts"; cur.id = "preview-next"; cur.setAttribute("aria-hidden", "true"); cur.title = ""; $("#preview-ref").textContent = short(state && state.settings.trunk_sha); };
+      next.addEventListener("load", onload);
+      next.src = `/site/main/?t=${Date.now()}`;
+    }, 4000);
+  }
 
   let toastCount = 0;
   function toast(kind, html) {
