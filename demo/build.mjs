@@ -50,7 +50,7 @@ for (const [name, src, speed, minS, maxS] of SCENES) {
   const raw = `${OUT}raw/${src}.webm`;
   if (!existsSync(raw)) { console.warn(`missing ${raw}, skipping`); continue; }
   const audioKey = name in AUDIO ? AUDIO[name] : name;
-  const aiff = audioKey ? `${OUT}audio/${audioKey}.aiff` : null;
+  const aiff = audioKey ? (existsSync(`${OUT}audio/${audioKey}.wav`) ? `${OUT}audio/${audioKey}.wav` : `${OUT}audio/${audioKey}.aiff`) : null;
   const nDur = aiff ? dur(aiff) : 0;
   let footage = dur(raw) / speed;
   let L = Math.max(nDur + 1.2, minS || 0, Math.min(footage, maxS || footage));

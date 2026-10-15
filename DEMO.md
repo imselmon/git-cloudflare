@@ -43,7 +43,7 @@ cd trunk && git log --format='%h %s%n%(trailers)' -3 && git fetch origin 'refs/n
 
 ## Regenerating the demo video
 
-The video in the submission was produced by `demo/`: Playwright records the live dashboard and the HTML cards in `demo/cards/`, macOS `say` reads `demo/narration.json`, and ffmpeg assembles 1080p30 H.264 with burned-in captions and an `.srt` sidecar.
+The video in the submission was produced by `demo/`: Playwright records the live dashboard and the HTML cards in `demo/cards/`, Cartesia Sonic reads `demo/narration.json` (`node narrate.mjs`, with `CARTESIA_API_KEY` in the environment or `demo/.env`; macOS `say` is the fallback below), and ffmpeg assembles 1080p30 H.264 with burned-in captions and an `.srt` sidecar.
 
 ```bash
 cd demo && npm install && npx playwright install chromium

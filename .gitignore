@@ -6,3 +6,4 @@ node_modules/
 demo/node_modules/
 demo/out/
 demo/package-lock.json
+demo/.env
