@@ -253,7 +253,8 @@
     previewTimer = setTimeout(() => {
       previewTimer = null;
       const next = $("#preview-next"), cur = $("#preview");
-      const onload = () => { next.removeEventListener("load", onload); next.id = "preview"; next.removeAttribute("aria-hidden"); next.title = "Live site served from Artifacts"; cur.id = "preview-next"; cur.setAttribute("aria-hidden", "true"); cur.title = ""; $("#preview-ref").textContent = short(state && state.settings.trunk_sha); };
+      // Swap a moment after load so the site's own section fetches have finished and nothing looks half-rendered.
+      const onload = () => { next.removeEventListener("load", onload); setTimeout(() => { next.id = "preview"; next.removeAttribute("aria-hidden"); next.title = "Live site served from Artifacts"; cur.id = "preview-next"; cur.setAttribute("aria-hidden", "true"); cur.title = ""; $("#preview-ref").textContent = short(state && state.settings.trunk_sha); }, 1200); };
       next.addEventListener("load", onload);
       next.src = `/site/main/?t=${Date.now()}`;
     }, 4000);

@@ -61,13 +61,14 @@
       const n = find(sel);
       let cx = window.innerWidth / 2, cy = window.innerHeight / 2;
       if (n) { const r = n.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2; }
-      // keep the zoomed viewport inside the page
-      const w = window.innerWidth / factor, h = window.innerHeight / factor;
-      cx = Math.max(w / 2, Math.min(cx, window.innerWidth - w / 2));
-      cy = Math.max(h / 2, Math.min(cy, window.innerHeight - h / 2));
-      document.body.style.transformOrigin = `${cx}px ${cy}px`;
-      document.body.style.transform = `scale(${factor})`;
-      setTimeout(() => { document.body.style.transform = "scale(1)"; }, ms);
+      // Centre the target on screen; clamp so the page still covers the viewport.
+      const W = window.innerWidth, H = window.innerHeight;
+      let tx = W / 2 - cx * factor, ty = H / 2 - cy * factor;
+      tx = Math.min(0, Math.max(W - W * factor, tx));
+      ty = Math.min(0, Math.max(H - H * factor, ty));
+      document.body.style.transformOrigin = "0 0";
+      document.body.style.transform = `translate(${tx}px, ${ty}px) scale(${factor})`;
+      setTimeout(() => { document.body.style.transform = "translate(0px, 0px) scale(1)"; }, ms);
       return Boolean(n);
     },
     /** A scene title chip at the top. */
@@ -77,6 +78,6 @@
       remove([t], ms);
       return true;
     },
-    clear() { layer.innerHTML = ""; document.body.style.transform = "scale(1)"; },
+    clear() { layer.innerHTML = ""; document.body.style.transform = "translate(0px, 0px) scale(1)"; },
   };
 })();
